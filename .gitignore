@@ -8,6 +8,7 @@
 *~
 *.orig
 *.rej
+*.swp
 erl_crash.dump
 configure
 autom4te.cache
