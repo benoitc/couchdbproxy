@@ -18,8 +18,8 @@ CouchdbProxy use [couchbeam](http://bitbucket.org/benoitc/couchbeam/) to dialog 
 
 ### 1. requirements
 
-  - bind 9 or ant dns server that handle wildcards in ANAME
-  - [CouchDB](http://couchdb.apache.org) 0.10x or sup
+  - bind 9 or any dns server that handle wildcards in ANAME.
+  - [CouchDB](http://couchdb.apache.org) 0.10x or sup.
   - [Python CouchdbKit](http://bitbucket.org/benoitc/couchdbkit/) for console utilities & basic setup. 
 
 
