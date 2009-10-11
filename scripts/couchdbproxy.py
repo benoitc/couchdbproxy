@@ -179,7 +179,7 @@ Command line utility to manage couchdbproxy.
 
     couchdbproxy remove_node proxy_url nodename
     
-- Add user node :
+- Add/update user node :
 
     couchdbproxy add_user proxy_url nodename username port
     
@@ -193,7 +193,7 @@ Command line utility to manage couchdbproxy.
     couchdbproxy remove_user proxy_url username
     
     
-- Add alias
+- Add/update alias
 
     couchdbproxy add_alias proxy_url nodename hostname port path
     
@@ -232,7 +232,7 @@ Command line utility to manage couchdbproxy.
             return parser.error('incorrect number of arguments.')
         proxy = CouchdbProxyCtl(args[1])
         proxy.remove_node(args[2])
-    elif args[0] == "add_user":
+    elif args[0] == "add_user" or args[0] == "update_user":
         if len(args) < 5:
             return parser.error('incorrect number of arguments.')
         proxy = CouchdbProxyCtl(args[1])
@@ -242,7 +242,7 @@ Command line utility to manage couchdbproxy.
             return parser.error('incorrect number of arguments.')
         proxy = CouchdbProxyCtl(args[1])
         proxy.remove_user(args[2])
-    elif args[0] == "add_alias":
+    elif args[0] == "add_alias" or args[0] == "update_alias":
         if len(args) < 5:
             return parser.error('incorrect number of arguments.')
         proxy = CouchdbProxyCtl(args[1])

@@ -35,7 +35,8 @@ stop() ->
 
 loop(Req, _DocRoot, BaseHostname) ->
 	case get_cname(Req, BaseHostname) of
-	    
+	    not_found ->
+		    Req:not_found();
 	    {raw, Body} ->
 	        Headers = [{"Content-Type", "application/json"}],
 	        Req:respond({200, couchdbproxy_http:server_headers(), Body});
@@ -60,9 +61,7 @@ loop(Req, _DocRoot, BaseHostname) ->
 			    error ->
 			        couchdbproxy_routes:clean_cname(HostName)
 			after 0 -> ok
-			end;
-		not_found ->
-			 Req:not_found()
+			end
 	end.
 
 %% Internal API
