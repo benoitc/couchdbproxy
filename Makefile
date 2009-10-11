@@ -1,10 +1,10 @@
 all: compile
 
 compile:
-  @mkdir -p couchdbproxy/ebin
-  @mkdir couchdbproxy/deps/mochiweb/ebin
-  @mkdir couchdbproxy/deps/couchbeam/ebin
-  @mkdir couchdbproxy/deps/couchbeam/deps/lhttpc/ebin
+	@mkdir -p couchdbproxy/ebin
+	@mkdir -p couchdbproxy/deps/mochiweb/ebin
+	@mkdir -p couchdbproxy/deps/couchbeam/ebin
+	@mkdir -p couchdbproxy/deps/couchbeam/deps/lhttpc/ebin
 	(cd couchdbproxy/deps/mochiweb;$(MAKE))
 	(cd couchdbproxy/deps/couchbeam;$(MAKE))
 	make -C couchdbproxy
