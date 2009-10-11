@@ -16,14 +16,14 @@ CouchdbProxy use [couchbeam](http://bitbucket.org/benoitc/couchbeam/) to dialog 
 
 ## Installation :
 
-1. requirements
+### 1. requirements
 
   - bind 9 or ant dns server that handle wildcards in ANAME
   - [CouchDB](http://couchdb.apache.org) 0.10x or sup
   - [Python CouchdbKit](http://bitbucket.org/benoitc/couchdbkit/) for console utilities & basic setup. 
 
 
-2. Configure bind
+### 2. Configure bind
 
 Add your our zone. Here is an example to configure a local zone for development though configuration is the same for production server, you just have to change the domain name.
 
@@ -52,7 +52,7 @@ then add a zone. On my machine it's in /var/named. Create a file couchdbproxy.de
     ns0           IN      A       127.0.0.1
     *             IN      A       127.0.0.1
 
-3. Configure master couchdb node.
+### 3. Configure master couchdb node.
 
 This node will be used to store and retrieve dynamically nodes for one user and cname. Install CouchDB somewhere by following [CouchDB installation](http://wiki.apache.org/couchdb/Installation) and set proxy.conf in couchdbproxy/priv folder :
 
@@ -72,7 +72,7 @@ if you want to add an admin username/password do, change proxy_hostconfig accord
     {proxy_hostconfig, [{host, "127.0.0.1"}, {port, 5984}, {username, "someuser"}, {password, "somepassword"}]}.
     
     
-4. build couchdbproxy and setup the basic design doc :
+### 4. build couchdbproxy and setup the basic design doc :
 
 In couchdbproxy source folder run :
 
