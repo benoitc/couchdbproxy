@@ -47,7 +47,7 @@ then add a zone. On my machine it's in /var/named. Create a file couchdbproxy.de
 
 3. Configure master couchdb node.
 
-This node will be used to store and retrieve dynamically nodes for one user and cname. Install CouchDB somewhere by following [CouchDB insyallation](http://wiki.apache.org/couchdb/Installation) and set proxy.conf in couchdbproxy/priv folder :
+This node will be used to store and retrieve dynamically nodes for one user and cname. Install CouchDB somewhere by following [CouchDB installation](http://wiki.apache.org/couchdb/Installation) and set proxy.conf in couchdbproxy/priv folder :
 
 
     % base hostname used for rewriting
