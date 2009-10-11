@@ -1,10 +1,16 @@
 # couchdbproxy
 
-Simple multinode couchdb proxy. Allow you to proxy from one ip to muliple couchdb nodes running on differents ips or ports. Main objectiv is to have something like 
+Simple multinode couchdb proxy. It allows you to proxy from one ip to muliple couchdb nodes running on differents ips or ports. CouchdbProxy also supports streaming, some basic url rewriting and domain aliasing. You could add/remove a user couchdb node or an alias dynamically. So basically it allows you to host a little `couch.io` like on your own side.
+
+With couchdbproxy you could do something like
 
     http://someuser.yourdomain.com -> someip:someport
 
-CouchdbProxy support some basic url rewriting and domain aliasing.
+or 
+
+    http://mydomain.com - someip:someport/mydb/_design/mycouchapp
+    http://someuser.yourdomain.com -> someip:someport
+
 
 ## Installation :
 

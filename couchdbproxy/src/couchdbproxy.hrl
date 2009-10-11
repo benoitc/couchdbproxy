@@ -20,7 +20,7 @@
 	}).
 
 -define(CPVSN, "0.1").
--define(QUIP, "Inditeweb CouchDB proxy").
+-define(QUIP, "CouchDB Proxy").
 
 -record(url, {abspath, host, port, username, password, path, protocol}).
 
