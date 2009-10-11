@@ -69,6 +69,7 @@ if you want to add an admin username/password do, change proxy_hostconfig accord
 
 In couchdbproxy source folder run :
 
+    easy_install -U couchdbkit
     make && make setup
 
 That's it.
