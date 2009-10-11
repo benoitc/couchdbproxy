@@ -5,21 +5,22 @@ Simple multinode couchdb proxy. It allows you to proxy from one ip to muliple co
 With couchdbproxy you could do something like
 
     http://someuser.yourdomain.com -> someip:someport
-
+    
 or 
 
     http://mydomain.com - someip:someport/mydb/_design/mycouchapp
     http://someuser.yourdomain.com -> someip:someport
+
+CouchdbProxy use [couchbeam](http://bitbucket.org/benoitc/couchbeam/) to dialog with CouchDB and [mochiweb](http://code.google.com/p/mochiweb/) for HTTP syntax-management.
 
 
 ## Installation :
 
 1. requirements
 
-
   - bind 9 or ant dns server that handle wildcards in ANAME
-  - couchdb 0.10x or sup
-  - python couchdbkit for console utilities & basic setup. 
+  - [CouchDB](http://couchdb.apache.org) 0.10x or sup
+  - [Python CouchdbKit](http://bitbucket.org/benoitc/couchdbkit/) for console utilities & basic setup. 
 
 
 2. Configure bind
