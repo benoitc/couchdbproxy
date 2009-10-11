@@ -1,0 +1,15 @@
+*.beam
+*.gz
+*.tpl
+*.o
+*.lo
+*.m4
+*.in
+*~
+*.orig
+*.rej
+erl_crash.dump
+configure
+autom4te.cache
+build-aux
+*.diff

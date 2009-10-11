@@ -1,0 +1,6 @@
+doc/
+ebin/
+*.swp
+*.dump
+edoc-info
+.DS_Store
