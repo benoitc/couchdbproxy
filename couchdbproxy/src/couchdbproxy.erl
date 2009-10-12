@@ -30,6 +30,8 @@ ensure_started(App) ->
 start() ->
     couchdbproxy_deps:ensure(),
     ensure_started(crypto),
+    ensure_started(ssl),
+    ensure_started(lhttpc),
     ensure_started(couchbeam),
     application:start(couchdbproxy).
 
@@ -38,5 +40,7 @@ start() ->
 stop() ->
     Res = application:stop(couchdbproxy),
     application:stop(couchbeam),
+    application:stop(lhttpc),
+    application:stop(ssl),
     application:stop(crypto),
     Res.

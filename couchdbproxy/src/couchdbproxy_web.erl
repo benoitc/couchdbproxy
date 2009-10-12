@@ -45,7 +45,7 @@ loop(Req, _DocRoot, BaseHostname) ->
 			ProxyReq = #proxy{
 				mochi_req=Req
 			},
-			couchdbproxy_revproxy:request(ProxyReq, Path, ProxyUrl, self()),
+			couchdbproxy_revproxy:request(self(), ProxyReq, Path, ProxyUrl),
 			receive
 			    error ->
 			        couchdbproxy_routes:clean_user(UserName)
@@ -56,7 +56,7 @@ loop(Req, _DocRoot, BaseHostname) ->
 			ProxyReq = #proxy{
 				mochi_req=Req
 			},
-			couchdbproxy_revproxy:request(ProxyReq, Path, ProxyUrl, self()),
+			couchdbproxy_revproxy:request(self(), ProxyReq, Path, ProxyUrl),
 		    receive
 			    error ->
 			        couchdbproxy_routes:clean_cname(HostName)

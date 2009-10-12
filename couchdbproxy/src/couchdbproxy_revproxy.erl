@@ -19,21 +19,67 @@
 
 -record(psock, {
     socket,
-    headers}).
+    headers,
+    attempts}).
     
 -define(IDLE_TIMEOUT, infinity).
 -define(STREAM_CHUNK_SIZE, 16384). %% 16384
 
-request(#proxy{mochi_req=MochiReq}= Req, Path, Url, ParentPid) ->
-    case connect_url(Url) of
-    {ok, DSock} ->
-        From = #psock{socket=MochiReq:get(socket), headers=MochiReq:get(headers)},
-        To = #psock{socket=DSock},
-        do_proxy_request(Req, From, To, Path, Url) ;
-    {error, Reason} ->
-        ParentPid ! error,
-        couchdbproxy_http:send_error(Req, {bad_gateway, Reason})
-    end.
+request(From, Req, Path, Url) ->
+    R = try
+        execute(Req, Path, Url)
+    catch
+        
+        error: Error ->
+            From ! error,
+            couchdbproxy_http:send_error(Req, {bad_gateway, Error})
+    end,
+    unlink(From),
+    ok.
+        
+        
+execute(#proxy{mochi_req=MochiReq}= Req, Path, Url) ->
+    #url{host=Host, port=Port} = couchdbproxy_util:parse_url(Url),
+    
+    SocketRequest = {socket, self(), Host, Port, false},
+    DSock = case gen_server:call(lhttpc_manager, SocketRequest, infinity) of
+        {ok, S}   -> S; % Re-using HTTP/1.1 connections
+        no_socket -> undefined % Opening a new HTTP/1.1 connection
+    end,
+    From = #psock{socket=MochiReq:get(socket), headers=MochiReq:get(headers)},
+    To = #psock{socket=DSock, attempts=2},
+    case do_proxy_request(Req, From, To, Path, Url) of
+        {ok, undefined} -> ok;
+        {ok, NewSocket} ->
+            ManagerPid = whereis(lhttpc_manager),
+            case lhttpc_sock:controlling_process(NewSocket, ManagerPid, false) of
+                ok ->
+                    gen_server:cast(lhttpc_manager,
+                        {done, Host, Port, false, NewSocket});
+                _ ->
+                    ok
+            end
+    end,
+    ok.
+    
+    
+
+do_proxy_request(_Req, _From, #psock{attempts=0}, _Path, _Url) ->
+    throw(connection_closed);
+do_proxy_request(Req, From, #psock{socket=undefined}=To, Path, Url) ->
+    #url{host=Host, port=Port} = couchdbproxy_util:parse_url(Url),
+    SocketOptions = [binary, {packet, http}, {active, false}, {nodelay, true}],
+    case lhttpc_sock:connect(Host, Port, SocketOptions, 300000, false) of
+        {ok, Socket} ->
+            do_proxy_request(Req, From, To#psock{socket=Socket}, Path, Url);
+        {error, etimedout} ->
+            % TCP stack decided to give up
+            throw(connect_timeout);
+        {error, timeout} ->
+            throw(connect_timeout);
+        {error, Reason} ->
+            erlang:error(Reason)
+    end;
  
 do_proxy_request(#proxy{mochi_req=MochiReq}=Req, From, To, Path, Url) ->
     Headers = mochiweb_headers:to_list(MochiReq:get(headers)),
@@ -79,7 +125,7 @@ do_proxy_request(#proxy{mochi_req=MochiReq}=Req, From, To, Path, Url) ->
             case get_body(Method, Status) of
             true -> 
                 case recv_stream_body(To1, From, ?STREAM_CHUNK_SIZE) of
-                {error, Reason2} -> 
+                {error, _Reason2} -> 
                     write_chunk(To1#psock.socket, "<< an unexpected error happened >>");
                 ok -> 
                     case body_length(To1) of
@@ -91,8 +137,10 @@ do_proxy_request(#proxy{mochi_req=MochiReq}=Req, From, To, Path, Url) ->
                 ok 
             end
             
-    end;
+        end,
+        {ok, To#psock.socket};
     {error, Reason} ->
+        throw(Reason),
         couchdbproxy_http:send_error(Req, {bad_gateway, Reason})
     end.
 
@@ -121,7 +169,7 @@ collect_headers (Socket, Resp, Headers, Count) when Count < 1000 ->
     end.
 
 get_proxy_headers(Socket) ->
-    inet:setopts(Socket, [{packet, http}]),
+    lhttpc_sock:setopts(Socket, [{packet, http}], false),
     case http_recv_request(Socket) of
         bad_request ->
             {error, {bad_gateway, <<"Bad requesr">>}};
@@ -133,7 +181,7 @@ get_proxy_headers(Socket) ->
     end.
     
 http_recv_request(Socket) ->
-    case gen_tcp:recv(Socket, 0, ?IDLE_TIMEOUT) of
+    case lhttpc_sock:recv(Socket, 0, ?IDLE_TIMEOUT, false) of
         {ok, R} when is_record(R, http_request) ->
             
             R;
@@ -167,13 +215,13 @@ body_length(#psock{headers=H}) ->
 recv_stream_body(From, To, MaxHunkSize) ->
     case body_length(From) of
     {unknown_transfer_encoding, _} -> 
-        gen_tcp:send(To#psock.socket, <<>>),
+        lhttpc_sock:send(To#psock.socket, <<>>, false),
         ok;
     undefined ->
-        gen_tcp:send(To#psock.socket, <<>>),
+        lhttpc_sock:send(To#psock.socket, <<>>, false),
         ok;
     0 ->
-        gen_tcp:send(To#psock.socket, <<>>),
+        lhttpc_sock:send(To#psock.socket, <<>>, false),
         ok;
     chunked ->
         recv_chunked_body(From#psock.socket, To#psock.socket, MaxHunkSize);
@@ -182,15 +230,15 @@ recv_stream_body(From, To, MaxHunkSize) ->
     end.
 
 recv_unchunked_body(From, To, MaxHunk, DataLeft) ->
-    inet:setopts(From, [{packet, raw}]),
+    lhttpc_sock:setopts(From, [{packet, raw}], false),
     case MaxHunk >= DataLeft of
         true ->
-            {ok,Data1} = gen_tcp:recv(From, DataLeft, ?IDLE_TIMEOUT),
-            gen_tcp:send(To, Data1),
+            {ok,Data1} = lhttpc_sock:recv(From, DataLeft, ?IDLE_TIMEOUT, false),
+            lhttpc_sock:send(To, Data1, false),
             ok;
         false ->
-            {ok,Data2} = gen_tcp:recv(From, MaxHunk, ?IDLE_TIMEOUT),
-            gen_tcp:send(To, Data2),
+            {ok,Data2} = lhttpc_sock:recv(From, MaxHunk, ?IDLE_TIMEOUT, false),
+            lhttpc_sock:send(To, Data2, false),
             recv_unchunked_body(From, To, MaxHunk, DataLeft-MaxHunk)
     end.
     
@@ -212,17 +260,17 @@ recv_chunked_body(From, To, MaxChunkSize, LeftInChunk) ->
         write_chunk(To, Data1),
         recv_chunked_body(From, To, MaxChunkSize);
     false ->
-        {ok, Data2} = gen_tcp:recv(From, MaxChunkSize,
-            ?IDLE_TIMEOUT),
+        {ok, Data2} = lhttpc_sock:recv(From, MaxChunkSize,
+            ?IDLE_TIMEOUT, false),
          write_chunk(To, Data2),
          recv_chunked_body(From, To, MaxChunkSize, LeftInChunk-MaxChunkSize)
     end.
     
 read_chunk_length(Socket) ->
-    inet:setopts(Socket, [{packet, line}]),
-    case gen_tcp:recv(Socket, 0, ?IDLE_TIMEOUT) of
+    lhttpc_sock:setopts(Socket, [{packet, line}], false),
+    case lhttpc_sock:recv(Socket, 0, ?IDLE_TIMEOUT, false) of
         {ok, Header} ->
-            inet:setopts(Socket, [{packet, raw}]),
+            lhttpc_sock:setopts(Socket, [{packet, raw}], false),
             Splitter = fun (C) ->
                                C =/= $\r andalso C =/= $\n andalso C =/= $
                        end,
@@ -239,9 +287,9 @@ read_chunk_length(Socket) ->
     end.
 
 read_chunk(Socket,  0) ->
-    inet:setopts(Socket, [{packet, line}]),
+    lhttpc_sock:setopts(Socket, [{packet, line}], false),
     F = fun (F1, Acc) ->
-                case gen_tcp:recv(Socket, 0, ?IDLE_TIMEOUT) of
+                case lhttpc_sock:recv(Socket, 0, ?IDLE_TIMEOUT, false) of
                     {ok, <<"\r\n">>} ->
                         Acc;
                     {ok, Footer} ->
@@ -251,25 +299,16 @@ read_chunk(Socket,  0) ->
                 end
         end,
     Footers = F(F, []),
-    inet:setopts(Socket, [{packet, raw}]),
+    lhttpc_sock:setopts(Socket, [{packet, raw}], false),
     Footers;
 read_chunk(Socket, Length) ->
-    case gen_tcp:recv(Socket, 2 + Length, ?IDLE_TIMEOUT) of
+    case lhttpc_sock:recv(Socket, 2 + Length, ?IDLE_TIMEOUT, false) of
         {ok, <<Chunk:Length/binary, "\r\n">>} ->
             Chunk;
         _ ->
             exit(normal)
     end.
-         
-connect_url(Url) ->
-    #url{host=Host, port=Port} = couchdbproxy_util:parse_url(Url),
-    gen_tcp:connect(Host, Port, [
-        binary,
-        {active, false}, 
-        {packet, http},
-        {nodelay, true}]).
     
-        
 start_client_request(Req, S, Method, Path, Headers, Url) ->
     #url{host=Host, port=Port} = couchdbproxy_util:parse_url(Url),    
     HProxy = mochiweb_headers:make(Headers),
@@ -280,7 +319,7 @@ start_client_request(Req, S, Method, Path, Headers, Url) ->
     
 start_raw_client_request(S, Method, Path, Headers) ->
     HStr = headers_to_str(Headers),
-    gen_tcp:send(S, [?l2b(Method), <<" ">>, ?l2b(Path), <<" HTTP/1.1 ">>, <<"\r\n">> | HStr]).
+    lhttpc_sock:send(S, [?l2b(Method), <<" ">>, ?l2b(Path), <<" HTTP/1.1 ">>, <<"\r\n">> | HStr], false).
                     
 headers_to_str(Headers) ->
     F = fun ({K, V}, Acc) ->
@@ -311,7 +350,7 @@ fix_location([H|T], C) ->
 
 write_chunk(Socket, Data) ->
     Length = iolist_size(Data),
-    gen_tcp:send(Socket, [io_lib:format("~.16b\r\n", [Length]), Data, <<"\r\n">>]).
+    lhttpc_sock:send(Socket, [io_lib:format("~.16b\r\n", [Length]), Data, <<"\r\n">>], false).
     
     
 proxy_headers(#proxy{mochi_req=MochiReq}) ->
