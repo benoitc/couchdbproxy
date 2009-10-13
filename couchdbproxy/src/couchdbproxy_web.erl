@@ -34,34 +34,16 @@ stop() ->
     mochiweb_http:stop(?MODULE).
 
 loop(Req, _DocRoot, BaseHostname) ->
+    ProxyReq = #proxy{mochi_req=Req},
 	case get_cname(Req, BaseHostname) of
 	    not_found ->
 		    Req:not_found();
 	    {raw, Body} ->
-	        Headers = [{"Content-Type", "application/json"}],
 	        Req:respond({200, couchdbproxy_http:server_headers(), Body});
 		{user, UserName, ProxyUrl, Path} -> 
-			%% revert cname parts so we could use it for proxy and rewrite
-			ProxyReq = #proxy{
-				mochi_req=Req
-			},
-			couchdbproxy_revproxy:request(self(), ProxyReq, Path, ProxyUrl),
-			receive
-			    error ->
-			        couchdbproxy_routes:clean_user(UserName)
-			after 0 -> ok
-			end;
+			couchdbproxy_revproxy:request(ProxyReq, Path, ProxyUrl, {user, UserName});
 	    {cname,  HostName, ProxyUrl, Path} ->
-	        %% revert cname parts so we could use it for proxy and rewrite
-			ProxyReq = #proxy{
-				mochi_req=Req
-			},
-			couchdbproxy_revproxy:request(self(), ProxyReq, Path, ProxyUrl),
-		    receive
-			    error ->
-			        couchdbproxy_routes:clean_cname(HostName)
-			after 0 -> ok
-			end
+			couchdbproxy_revproxy:request(ProxyReq, Path, ProxyUrl, {cname, HostName})
 	end.
 
 %% Internal API

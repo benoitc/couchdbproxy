@@ -21,7 +21,7 @@
 -export([start_link/0]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
--export([get_alias/1, get_user/1, clean_user/1]).
+-export([get_alias/1, get_user/1, clean_user/1, clean_route/1]).
          
 -record(routes,{
     aliases,
@@ -47,6 +47,11 @@ clean_user(UserName) ->
     
 clean_cname(HostName) ->
     gen_server:cast(couchdbproxy_routes, {clean_cname, HostName}).
+    
+clean_route({user, UserName}) ->
+    clean_user(UserName);
+clean_route({cname, HostName}) ->
+    clean_cname(HostName).
     
 handle_call({get_alias, HostName}, _From, #routes{aliases=Aliases}=Routes) ->
     Key = [list_to_binary(mochiweb_util:unquote(Part))

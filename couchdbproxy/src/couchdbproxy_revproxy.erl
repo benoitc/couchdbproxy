@@ -25,22 +25,24 @@
 -define(IDLE_TIMEOUT, infinity).
 -define(STREAM_CHUNK_SIZE, 16384). %% 16384
 
-request(From, Req, Path, Url) ->
-    R = try
+request(Req, Path, Url, Route) ->
+    try
         execute(Req, Path, Url)
     catch
-        
-        error: Error ->
-            From ! error,
+       Reason ->
+           couchdbproxy_routes:clean_route(Route),
+           couchdbproxy_http:send_error(Req, {bad_gateway, Reason});
+        error:closed ->
+            couchdbproxy_routes:clean_route(Route),
+            exit(normal);
+        error:Error ->
+            couchdbproxy_routes:clean_route(Route),
             couchdbproxy_http:send_error(Req, {bad_gateway, Error})
     end,
-    unlink(From),
     ok.
-        
-        
-execute(#proxy{mochi_req=MochiReq}= Req, Path, Url) ->
+             
+execute(#proxy{mochi_req=MochiReq}=Req, Path, Url) ->
     #url{host=Host, port=Port} = couchdbproxy_util:parse_url(Url),
-    
     SocketRequest = {socket, self(), Host, Port, false},
     DSock = case gen_server:call(lhttpc_manager, SocketRequest, infinity) of
         {ok, S}   -> S; % Re-using HTTP/1.1 connections
@@ -62,14 +64,12 @@ execute(#proxy{mochi_req=MochiReq}= Req, Path, Url) ->
     end,
     ok.
     
-    
-
 do_proxy_request(_Req, _From, #psock{attempts=0}, _Path, _Url) ->
     throw(connection_closed);
 do_proxy_request(Req, From, #psock{socket=undefined}=To, Path, Url) ->
     #url{host=Host, port=Port} = couchdbproxy_util:parse_url(Url),
-    SocketOptions = [binary, {packet, http}, {active, false}, {nodelay, true}],
-    case lhttpc_sock:connect(Host, Port, SocketOptions, 300000, false) of
+    SocketOptions = [binary, {packet, http}, {active, false}],
+    case lhttpc_sock:connect(Host, Port, SocketOptions, infinity, false) of
         {ok, Socket} ->
             do_proxy_request(Req, From, To#psock{socket=Socket}, Path, Url);
         {error, etimedout} ->
@@ -80,82 +80,88 @@ do_proxy_request(Req, From, #psock{socket=undefined}=To, Path, Url) ->
         {error, Reason} ->
             erlang:error(Reason)
     end;
- 
 do_proxy_request(#proxy{mochi_req=MochiReq}=Req, From, To, Path, Url) ->
     Headers = mochiweb_headers:to_list(MochiReq:get(headers)),
     Method = convert_method(MochiReq:get(method)),
     case start_client_request(Req, To#psock.socket, Method, Path, Headers, Url) of
     ok -> 
         case MochiReq:get_header_value("expect") of
-    	{"100-continue", _} ->
-    	    MochiReq:start_raw_response({100, gb_trees:empty()});
-    	_Else ->
-    	    ok
+    	    {"100-continue", _} ->
+        	    MochiReq:start_raw_response({100, gb_trees:empty()});
+        	_ -> ok
         end,
         case recv_stream_body(From, To, ?STREAM_CHUNK_SIZE) of
-        {error, Reason1} ->
-            couchdbproxy_http:send_error(Req, {bad_request, Reason1}),
-            exit(normal);
-        _ -> ok
+            {error, Reason1} ->
+                couchdbproxy_http:send_error(Req, {bad_request, Reason1}),
+                exit(normal);
+            _ -> ok
         end,
         {R, RespHeaders} = get_proxy_headers(To#psock.socket),
-       
         #http_response{status=Status} = R,
         if
-        (Status == 301) orelse (Status == 302) ->
-            RedirectUrl = mochiweb_headers:get_value("Location",
-                 mochiweb_headers:make(RespHeaders)),
-            RedirectUrl1 =  case mochiweb_util:partition(RedirectUrl, Url) of
-                {"", _, RelPath} ->
-         		    couchdbproxy_web:absolute_uri(MochiReq, RelPath);
-                {_, "", ""} -> RedirectUrl
+            (Status == 301) orelse (Status == 302) ->
+                RedirectUrl = mochiweb_headers:get_value("Location",
+                                    mochiweb_headers:make(RespHeaders)),
+                RedirectUrl1 =  case mochiweb_util:partition(RedirectUrl, Url) of
+                    {"", _, RelPath} ->
+             		    couchdbproxy_web:absolute_uri(MochiReq, RelPath);
+                    {_, "", ""} -> RedirectUrl
+                    end,
+                couchdbproxy_http:send_redirect(Req, RedirectUrl1),
+                {ok, To#psock.socket};
+            true ->
+                Host = couchdbproxy_web:host(MochiReq),
+                RespHeaders1 = fix_location(rewrite_headers(RespHeaders, Host), Host),
+                To1 = #psock{
+                        socket=To#psock.socket,
+                        headers=mochiweb_headers:make(RespHeaders1)},
+                case body_length(To1) of
+                    chunked -> couchdbproxy_http:start_response_chunked(MochiReq, {R, RespHeaders1});
+                    _ -> couchdbproxy_http:start_response(MochiReq, {R, RespHeaders1})
                 end,
-            couchdbproxy_http:send_redirect(Req, RedirectUrl1);
-        true ->
-            Host = couchdbproxy_web:host(MochiReq),
-            RespHeaders1 = fix_location(rewrite_headers(RespHeaders, Host), Host),
-            To1 = #psock{
-                    socket=To#psock.socket,
-                    headers=mochiweb_headers:make(RespHeaders1)},
-            case body_length(To1) of
-                chunked -> couchdbproxy_http:start_response_chunked(MochiReq, {R, RespHeaders1});
-                _ -> couchdbproxy_http:start_response(MochiReq, {R, RespHeaders1})
-            end,
             
-            case get_body(Method, Status) of
-            true -> 
-                case recv_stream_body(To1, From, ?STREAM_CHUNK_SIZE) of
-                {error, _Reason2} -> 
-                    write_chunk(To1#psock.socket, "<< an unexpected error happened >>");
-                ok -> 
-                    case body_length(To1) of
-                    chunked ->  write_chunk(To1#psock.socket, "");
-                    _ -> ok
-                    end
-                end;      
-            false -> 
-                ok 
-            end
-            
-        end,
-        {ok, To#psock.socket};
+                case get_body(Method, Status) of
+                    true -> 
+                        case recv_stream_body(To1, From, ?STREAM_CHUNK_SIZE) of
+                            {error, _Reason2} -> 
+                                write_chunk(To1#psock.socket, 
+                                        "<< an unexpected error happened >>");
+                            ok -> 
+                                case body_length(To1) of
+                                    chunked ->  write_chunk(To1#psock.socket, "");
+                                    _ -> ok
+                                end
+                        end;      
+                    false -> 
+                        ok 
+                end,
+                {ok, To1#psock.socket}
+        end;
+        
+    {error, closed} ->
+        lhttpc_sock:close(To#psock.socket, false),
+        NewTo = To#psock{
+            socket = undefined,
+            attempts = To#psock.attempts - 1
+        },
+        do_proxy_request(Req, From, NewTo, Path, Url);
     {error, Reason} ->
-        throw(Reason),
-        couchdbproxy_http:send_error(Req, {bad_gateway, Reason})
+        lhttpc_sock:close(To#psock.socket, false),
+        erlang:error(Reason)
     end.
 
 get_body(Method, Status) ->
     if 
-    Method == "HEAD" -> false;
-    true ->
-        case lists:member(Status,  [100,204,205,304]) of
-        true -> false;
-        false -> true
-        end
+        Method =:= "HEAD" -> false;
+        true ->
+            case lists:member(Status, [100,204,205,304]) of
+            true -> false;
+            false -> true
+            end
     end.
     
 collect_headers (Socket, Resp, Headers, Count) when Count < 1000 ->
-    case gen_tcp:recv(Socket, 0, ?IDLE_TIMEOUT) of
+    case lhttpc_sock:recv(Socket, 0, ?IDLE_TIMEOUT, false) of
         {ok, {http_header, _Num, Name, _, Value}} ->
             collect_headers(Socket, Resp, [{Name, Value} | Headers], Count+1);
         {ok, http_eoh} ->
@@ -164,17 +170,18 @@ collect_headers (Socket, Resp, Headers, Count) when Count < 1000 ->
             collect_headers(Socket, Resp, Headers, Count+1);
         {error, {http_error, "\n"}} ->
             collect_headers(Socket, Resp, Headers, Count+1);
-        _Err ->
-            exit(normal) 
+        Err ->
+            erlang:error(Err)
     end.
 
 get_proxy_headers(Socket) ->
     lhttpc_sock:setopts(Socket, [{packet, http}], false),
     case http_recv_request(Socket) of
         bad_request ->
-            {error, {bad_gateway, <<"Bad requesr">>}};
+            throw(bad_request);
         closed ->
-            {error, {bad_gateway, <<"Remote connection closed">>}};
+            lhttpc_sock:close(Socket, false),
+            erlang:error(closed);
         R -> 
             H = collect_headers(Socket, R, [], 0),
             {R, H}
@@ -183,7 +190,6 @@ get_proxy_headers(Socket) ->
 http_recv_request(Socket) ->
     case lhttpc_sock:recv(Socket, 0, ?IDLE_TIMEOUT, false) of
         {ok, R} when is_record(R, http_request) ->
-            
             R;
         {ok, R} when is_record(R, http_response) ->
             R;
@@ -191,13 +197,12 @@ http_recv_request(Socket) ->
             http_recv_request(Socket);
         {error, {http_error, "\n"}} ->
             http_recv_request(Socket);
-        {error, {http_error, _}} ->
-            bad_request;
-        {error, closed} -> 
-            closed;
+        {error, {http_error, _}} -> bad_request;
+        {error, closed} -> closed;
         {error, timeout} -> closed;
         _Other ->
             io:format("Got ~p~n", [_Other]),
+            lhttpc_sock:close(Socket, false),
             exit(normal)
     end.
 
@@ -233,18 +238,18 @@ recv_unchunked_body(From, To, MaxHunk, DataLeft) ->
     lhttpc_sock:setopts(From, [{packet, raw}], false),
     case MaxHunk >= DataLeft of
         true ->
-            {ok,Data1} = lhttpc_sock:recv(From, DataLeft, ?IDLE_TIMEOUT, false),
+            {ok, Data1} = lhttpc_sock:recv(From, DataLeft, ?IDLE_TIMEOUT, false),
             lhttpc_sock:send(To, Data1, false),
             ok;
         false ->
-            {ok,Data2} = lhttpc_sock:recv(From, MaxHunk, ?IDLE_TIMEOUT, false),
+            {ok, Data2} = lhttpc_sock:recv(From, MaxHunk, ?IDLE_TIMEOUT, false),
             lhttpc_sock:send(To, Data2, false),
             recv_unchunked_body(From, To, MaxHunk, DataLeft-MaxHunk)
     end.
     
 recv_chunked_body(From, To, MaxChunkSize) ->
     case read_chunk_length(From) of
-    error -> 
+    undefined ->
         {error, "Bad chunked transfer-encoding header"};
     0 ->  
         write_chunk(To, read_chunk(From, 0)),
@@ -279,14 +284,14 @@ read_chunk_length(Socket) ->
             %% catch badly encoded requests
             try mochihex:to_int(Hex)
             catch 
-                _:_ -> error
+                _:_ -> undefined
             end;
 
         _ ->
             exit(normal)
     end.
 
-read_chunk(Socket,  0) ->
+read_chunk(Socket, 0) ->
     lhttpc_sock:setopts(Socket, [{packet, line}], false),
     F = fun (F1, Acc) ->
                 case lhttpc_sock:recv(Socket, 0, ?IDLE_TIMEOUT, false) of
@@ -313,8 +318,7 @@ start_client_request(Req, S, Method, Path, Headers, Url) ->
     #url{host=Host, port=Port} = couchdbproxy_util:parse_url(Url),    
     HProxy = mochiweb_headers:make(Headers),
     HProxy1 = mochiweb_headers:enter("Host",  lists:append([Host, ":", integer_to_list(Port)]), HProxy),
-    HProxy2 = mochiweb_headers:default_from_list(proxy_headers(Req),
-                                                    HProxy1),
+    HProxy2 = mochiweb_headers:default_from_list(proxy_headers(Req), HProxy1),
     start_raw_client_request(S, Method, Path, HProxy2).
     
 start_raw_client_request(S, Method, Path, Headers) ->
