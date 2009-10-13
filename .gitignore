@@ -14,3 +14,5 @@ configure
 autom4te.cache
 build-aux
 *.diff
+
+doc/*.html
