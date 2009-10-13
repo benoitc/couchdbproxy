@@ -36,7 +36,6 @@
         connect/5,
         recv/2,
         recv/3,
-        recv/4,
         send/3,
         controlling_process/3,
         setopts/3,
@@ -94,16 +93,12 @@ recv(Socket, false) ->
 %% Will block untill `Length' bytes is available.
 %% @end
 -spec recv(socket(), integer(), bool()) -> {ok, any()} | {error, atom()}.
+recv(_, 0, _) ->
+    {ok, <<>>};
 recv(Socket, Length, true) ->
     ssl:recv(Socket, Length);
 recv(Socket, Length, false) ->
     gen_tcp:recv(Socket, Length).
-    
--spec recv(socket(), integer(), timeout(), bool()) -> {ok, any()} | {error, atom()}.
-recv(Socket, Length, Timeout, true) ->
-    ssl:recv(Socket, Length, Timeout);
-recv(Socket, Length, Timeout, false) ->
-    gen_tcp:recv(Socket, Length, Timeout).
 
 %% @spec (Socket, Data, SslFlag) -> ok | {error, Reason}
 %%   Socket = socket()
