@@ -3,6 +3,7 @@
   {vsn, "0.1"},
   {modules, [
     couchdbproxy,
+    couchdbproxy_api,
     couchdbproxy_app,
     couchdbproxy_sup,
     couchdbproxy_web,
@@ -12,7 +13,6 @@
 	  couchdbproxy_nodes,
 	  couchdbproxy_routes,
 	  couchdbproxy_util
-	
   ]},
   {registered, [couchdbproxy_sup]},
   {mod, {couchdbproxy_app, []}},

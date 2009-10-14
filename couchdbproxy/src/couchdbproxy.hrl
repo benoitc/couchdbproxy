@@ -20,6 +20,7 @@
 	headers,
 	method,
     host,
+    basename,
 	url,
 	path,
 	path_parts,

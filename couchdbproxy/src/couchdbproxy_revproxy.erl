@@ -17,7 +17,6 @@
 -include("couchdbproxy.hrl").
 
 -export([request/1]).
-
     
 -define(IDLE_TIMEOUT, infinity).
 -define(STREAM_CHUNK_SIZE, 16384). %% 16384
@@ -70,7 +69,6 @@ do_request(#proxy{method=Method,url=Url,path=Path}=State) ->
 
 send_response(#proxy{mochi_req=MochiReq,url=Url,host=Host,status_code=Status,
             response_headers=RespHeaders,response_body=ResponseBody} = State) ->
-    
     if
         (Status == 301) orelse (Status == 302) ->
             RedirectUrl = mochiweb_headers:get_value("Location",
@@ -82,7 +80,6 @@ send_response(#proxy{mochi_req=MochiReq,url=Url,host=Host,status_code=Status,
             end,
             MochiReq:respond({Status, [{"Location", RedirectUrl1}], <<>>});
         true ->
-            
             RespHeaders1 = fix_location(rewrite_headers(RespHeaders, Host), Host),
             {Resp, RespType} = case body_length(State) of
                 chunked ->
@@ -112,6 +109,7 @@ send_response(#proxy{mochi_req=MochiReq,url=Url,host=Host,status_code=Status,
                     end
             end
         end.
+        
 send_chunked_response({ok, {http_eob, _Trailers}}, _Pid, Resp) ->
     Resp:write_chunk("");
 send_chunked_response({ok, Bin}, Pid, Resp) ->
@@ -124,8 +122,7 @@ send_unchunked_response({ok, {http_eob, _Trailers}}, _Pid, _Resp) ->
 send_unchunked_response({ok, Bin}, Pid, Resp) ->
     Resp:send(Bin),
     NextState = lhttpc:get_body_part(Pid),
-    send_unchunked_response(NextState, Pid, Resp).       
-            
+    send_unchunked_response(NextState, Pid, Resp).           
             
 body_length(#proxy{response_headers=Hdrs}) ->
     MHdrs = mochiweb_headers:make(Hdrs),
@@ -174,7 +171,6 @@ read_sub_chunks(Length, Req, Acc) ->
     Bin = Req:read_chunk(Length),
     [Bin|Acc].
 
-
 send_unchunked_body(#proxy{socket=Socket}=State, CurrentState, DataLeft) ->
     lhttpc_sock:setopts(Socket, [{packet, raw}], false),
     case ?STREAM_CHUNK_SIZE >= DataLeft of
@@ -187,7 +183,6 @@ send_unchunked_body(#proxy{socket=Socket}=State, CurrentState, DataLeft) ->
             {ok, NextState2} = lhttpc:send_body_part(CurrentState, Data2),
             send_unchunked_body(State, NextState2, DataLeft-?STREAM_CHUNK_SIZE)
     end.
-
     
 first_chunk(#proxy{mochi_req=MochiReq}=State) ->
     PartialDownload = options_partial_download(State),
@@ -246,9 +241,11 @@ proxy_headers(#proxy{mochi_req=MochiReq,host=ProxyHost, headers=Hdrs, url=Url}) 
 gateway_error(#proxy{route=Route}=State, Reason) ->
     couchdbproxy_routes:clean_route(Route),
     couchdbproxy_http:send_error(State, {bad_gateway, Reason}).
-        
-        
+
+
 options_partial_download(#proxy{path_parts=[_DbName, <<"_changes">>|_]}) ->
+    [{window_size, infinity}];
+options_partial_download(#proxy{path_parts=[_DbName, <<"_active_tasks">>|_]}) ->
     [{window_size, infinity}];
 options_partial_download(_) ->
     [{window_size, infinity}, {part_size, ?STREAM_CHUNK_SIZE}].
