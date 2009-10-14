@@ -107,7 +107,6 @@ send_response(#proxy{mochi_req=MochiReq,url=Url,host=Host,status_code=Status,
                     end
             end
         end.
-                
 send_chunked_response({ok, {http_eob, _Trailers}}, _Pid, Resp) ->
     Resp:write_chunk("");
 send_chunked_response({ok, Bin}, Pid, Resp) ->
