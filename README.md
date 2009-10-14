@@ -121,7 +121,6 @@ easy.
 
 ## Todo :
 
-- share http connection.
 - caching with redis/memcached
 - add more dispatching possibilities
 - ...
