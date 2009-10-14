@@ -14,6 +14,7 @@
 -export([get_header_value/1, get_primary_header_value/1, get/1, dump/0]).
 -export([send/1, recv/1, recv/2, recv_body/0, recv_body/1, stream_body/3]).
 -export([start_response/1, start_response_length/1, start_raw_response/1]).
+-export([body_length/0]).
 -export([respond/1, ok/1]).
 -export([not_found/0, not_found/1]).
 -export([parse_post/0, parse_qs/0]).

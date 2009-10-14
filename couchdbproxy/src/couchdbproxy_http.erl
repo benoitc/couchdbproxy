@@ -58,12 +58,13 @@ start_response_chunked(MochiReq, {#http_response{version=Version}=HttpResponse, 
                          HResponse
                  end,
     start_response(MochiReq, {HttpResponse, HResponse1}).
-
-start_response(MochiReq, {HttpResponse, ResponseHeaders}) ->
+    
+start_response(Req, {Code, ResponseHeaders}) ->
+    
     HResponse = mochiweb_headers:make(ResponseHeaders),
     HResponse1 = mochiweb_headers:default_from_list(server_headers(),
                                                     HResponse),
-    start_raw_response(MochiReq, {HttpResponse, HResponse1}).
+    Req:start_raw_response({Code, HResponse1}).
 
 
 start_raw_response(MochiReq, {#http_response{version=Version,status=Code,

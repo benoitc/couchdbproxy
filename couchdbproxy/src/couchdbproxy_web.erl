@@ -34,16 +34,22 @@ stop() ->
     mochiweb_http:stop(?MODULE).
 
 loop(Req, _DocRoot, BaseHostname) ->
-    ProxyReq = #proxy{mochi_req=Req},
+    State = #proxy{mochi_req = Req,
+                   socket    = Req:get(socket),
+                   headers   = Req:get(headers),
+                   method    = Req:get(method),
+                   host      = host(Req)},
 	case get_cname(Req, BaseHostname) of
 	    not_found ->
 		    Req:not_found();
 	    {raw, Body} ->
 	        Req:respond({200, couchdbproxy_http:server_headers(), Body});
 		{user, UserName, ProxyUrl, Path} -> 
-			couchdbproxy_revproxy:request(ProxyReq, Path, ProxyUrl, {user, UserName});
+		    State1=State#proxy{url=ProxyUrl, path=Path, route={user, UserName}},
+			couchdbproxy_revproxy:request(State1);
 	    {cname,  HostName, ProxyUrl, Path} ->
-			couchdbproxy_revproxy:request(ProxyReq, Path, ProxyUrl, {cname, HostName})
+	        State2=State#proxy{url=ProxyUrl, path=Path, route={cname, HostName}},
+			couchdbproxy_revproxy:request(State2)
 	end.
 
 %% Internal API

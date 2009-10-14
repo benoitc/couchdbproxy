@@ -14,10 +14,19 @@
 -define(b2l(V), binary_to_list(V)).
 -define(l2b(V), list_to_binary(V)).
 
--record(proxy, 
-	{mochi_req,
-	cname_parts
-	}).
+-record(proxy, {
+    mochi_req,
+	socket=undefined,
+	headers,
+	method,
+    host,
+	url,
+	path,
+	route,
+	status_code,
+    reason,
+    response_headers,
+    response_body}).
 
 -define(CPVSN, "0.1").
 -define(QUIP, "CouchDB Proxy").
