@@ -26,8 +26,6 @@ start(Options) ->
     Loop = fun (Req) ->
                    ?MODULE:loop(Req, DocRoot, BaseHostname)
            end,
-           
-    io:format("ici"),
     mochiweb_http:start([{name, ?MODULE}, {loop, Loop} | Options2]).
 
 stop() ->
@@ -45,10 +43,20 @@ loop(Req, _DocRoot, BaseHostname) ->
 	    {raw, Body} ->
 	        Req:respond({200, couchdbproxy_http:server_headers(), Body});
 		{user, UserName, ProxyUrl, Path} -> 
-		    State1=State#proxy{url=ProxyUrl, path=Path, route={user, UserName}},
+		    {Path0, _, _} = mochiweb_util:urlsplit_path(Path),
+		    State1=State#proxy{url          = ProxyUrl, 
+		                       path         = Path,
+		                       path_parts   = [list_to_binary(mochiweb_util:unquote(Part))
+                                                        || Part <- string:tokens(Path0, "/")],
+		                       route        = {user, UserName}},
 			couchdbproxy_revproxy:request(State1);
 	    {cname,  HostName, ProxyUrl, Path} ->
-	        State2=State#proxy{url=ProxyUrl, path=Path, route={cname, HostName}},
+	        {Path1, _, _} = mochiweb_util:urlsplit_path(Path),
+	        State2=State#proxy{url          = ProxyUrl, 
+		                       path         = Path,
+		                       path_parts   = [list_to_binary(mochiweb_util:unquote(Part))
+                                                        || Part <- string:tokens(Path1, "/")],
+		                       route        = {cname, HostName}},
 			couchdbproxy_revproxy:request(State2)
 	end.
 

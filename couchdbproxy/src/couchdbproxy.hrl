@@ -22,6 +22,7 @@
     host,
 	url,
 	path,
+	path_parts,
 	route,
 	status_code,
     reason,

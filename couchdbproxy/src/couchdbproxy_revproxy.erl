@@ -27,7 +27,7 @@ request(#proxy{method=Method,url=Url,path=Path,route=Route}=State) ->
     #url{host=Host, port=Port} = couchdbproxy_util:parse_url(Url),
     {ok, Headers} = proxy_headers(State),
     
-    PartialDownload = [{window_size, infinity}, {part_size, ?STREAM_CHUNK_SIZE}],
+    PartialDownload = options_partial_download(State),
     {Options, Body, Length} = case has_body(Method) of
         false -> {[{partial_download, PartialDownload}], <<>>, 0};
         true ->
@@ -75,10 +75,10 @@ send_response(#proxy{mochi_req=MochiReq,url=Url,host=Host,status_code=Status,
                     couchdbproxy_web:absolute_uri(MochiReq, RelPath);
                 {_, "", ""} -> RedirectUrl
             end,
-            couchdbproxy_http:send_redirect(State, RedirectUrl1);
+            MochiReq:respond({Status, [{"Location", RedirectUrl1}], <<>>});
         true ->
-            RespHeaders1 = fix_location(rewrite_headers(RespHeaders, Host), Host),
             
+            RespHeaders1 = fix_location(rewrite_headers(RespHeaders, Host), Host),
             {Resp, RespType} = case body_length(State) of
                 chunked ->
                     {MochiReq:respond({Status, RespHeaders1 ++ couchdbproxy_http:server_headers(), chunked}), chunked};
@@ -93,7 +93,6 @@ send_response(#proxy{mochi_req=MochiReq,url=Url,host=Host,status_code=Status,
                     InitialState = lhttpc:get_body_part(Body),
                     case RespType of
                         chunked ->
-                            io:format("ici, ~p ~n", [ResponseBody]),
                             send_chunked_response(InitialState, Body, Resp);
                         _ ->
                             send_unchunked_response(InitialState, Body, Resp)
@@ -186,8 +185,8 @@ send_unchunked_body(#proxy{socket=Socket}=State, CurrentState, DataLeft) ->
     end.
 
     
-first_chunk(#proxy{mochi_req=MochiReq}) ->
-    PartialDownload = [{window_size, infinity}, {part_size, ?STREAM_CHUNK_SIZE}],
+first_chunk(#proxy{mochi_req=MochiReq}=State) ->
+    PartialDownload = options_partial_download(State),
     Options = [{partial_upload, infinity}, {partial_download, PartialDownload}],
     case MochiReq:body_length() of
         {unknown_transfer_encoding, _Unknown} ->
@@ -240,6 +239,11 @@ proxy_headers(#proxy{mochi_req=MochiReq,host=ProxyHost, headers=Hdrs, url=Url}) 
     Hdrs3 = [{maybe_atom(Name),Value} || {Name,Value} <- mochiweb_headers:to_list(Hdrs2)],
     {ok, Hdrs3}.
     
+
+options_partial_download(#proxy{path_parts=[_DbName, <<"_changes">>|_]}) ->
+    [{window_size, infinity}];
+options_partial_download(_) ->
+    [{window_size, infinity}, {part_size, ?STREAM_CHUNK_SIZE}].
     
 maybe_atom(K) when is_atom(K) ->
     atom_to_list(K);
