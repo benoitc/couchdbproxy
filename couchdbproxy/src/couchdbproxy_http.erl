@@ -59,9 +59,7 @@ send_error(Req, Error) ->
 
 send_error(Req, Code, ErrorStr, Reason) ->
 	Headers =  [{"Content-Type", "text/plain"}],
-	Body = io_lib:format("<html><head><title>~s</title></head>"
-						"<body><h1>~s</h1> ~p ~n</body></html>", 		
-						[ErrorStr, ErrorStr, Reason]),
+	Body = couchbeam:json_encode({[{"error", ErrorStr}, {"reason", Reason}]}),
 	send_response(Req, Code, Headers, Body).
 
 server_headers() ->

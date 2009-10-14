@@ -22,8 +22,16 @@
 -define(IDLE_TIMEOUT, infinity).
 -define(STREAM_CHUNK_SIZE, 16384). %% 16384
 
+request(State) ->
+    try
+        do_request(State)
+    catch
+        exit:{econnrefused, _} ->
+            gateway_error(State, <<"couchdb node is down.">>)
+        
+    end.
 
-request(#proxy{method=Method,url=Url,path=Path,route=Route}=State) ->
+do_request(#proxy{method=Method,url=Url,path=Path}=State) ->
     #url{host=Host, port=Port} = couchdbproxy_util:parse_url(Url),
     {ok, Headers} = proxy_headers(State),
     
@@ -35,34 +43,31 @@ request(#proxy{method=Method,url=Url,path=Path,route=Route}=State) ->
     end,
     case lhttpc:request(Host, Port, false, Path, Method, Headers, Body, ?IDLE_TIMEOUT, Options) of
         {ok, {{StatusCode, ReasonPhrase}, Hdrs, ResponseBody}} ->
-            State2 = State#proxy{
+            State1 = State#proxy{
                 status_code = StatusCode,
                 reason      = ReasonPhrase,
                 response_headers = Hdrs,
                 response_body = ResponseBody
             },
-            send_response(State2);
+            send_response(State1);
         {ok, UploadState} -> % we stream body
             case stream_body(State, UploadState, Length) of 
-                {ok, {{StatusCode1, ReasonPhrase1}, Hdrs1, ResponseBody1}} ->
+                {ok, {{StatusCode, ReasonPhrase}, Hdrs, ResponseBody}} ->
                     State1 = State#proxy{
-                        status_code = StatusCode1,
-                        reason      = ReasonPhrase1,
-                        response_headers = Hdrs1,
-                        response_body = ResponseBody1
+                        status_code = StatusCode,
+                        reason      = ReasonPhrase,
+                        response_headers = Hdrs,
+                        response_body = ResponseBody
                     },
                     send_response(State1);
-                {error, Reason1} ->
-                    couchdbproxy_routes:clean_route(Route),
-                    couchdbproxy_http:send_error(State, {bad_gateway, Reason1})
+                {error, Reason} ->
+                    gateway_error(State, Reason)
             end;
         
         {error, Reason} ->
-            couchdbproxy_routes:clean_route(Route),
-            couchdbproxy_http:send_error(State, {bad_gateway, Reason})
+            gateway_error(State, Reason)
     end.
-    
-    
+
 send_response(#proxy{mochi_req=MochiReq,url=Url,host=Host,status_code=Status,
             response_headers=RespHeaders,response_body=ResponseBody} = State) ->
     
@@ -238,7 +243,11 @@ proxy_headers(#proxy{mochi_req=MochiReq,host=ProxyHost, headers=Hdrs, url=Url}) 
     Hdrs3 = [{maybe_atom(Name),Value} || {Name,Value} <- mochiweb_headers:to_list(Hdrs2)],
     {ok, Hdrs3}.
     
-
+gateway_error(#proxy{route=Route}=State, Reason) ->
+    couchdbproxy_routes:clean_route(Route),
+    couchdbproxy_http:send_error(State, {bad_gateway, Reason}).
+        
+        
 options_partial_download(#proxy{path_parts=[_DbName, <<"_changes">>|_]}) ->
     [{window_size, infinity}];
 options_partial_download(_) ->
