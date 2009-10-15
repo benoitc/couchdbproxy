@@ -10,7 +10,7 @@
     couchdbproxy_deps,
 	  couchdbproxy_http,
 	  couchdbproxy_revproxy,
-	  couchdbproxy_nodes,
+	  couchdbproxy_machines,
 	  couchdbproxy_routes,
 	  couchdbproxy_util
   ]},

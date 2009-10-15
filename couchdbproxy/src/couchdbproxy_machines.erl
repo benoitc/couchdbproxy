@@ -11,7 +11,7 @@
 % License for the specific language governing permissions and limitations under
 % the License.
 
--module(couchdbproxy_nodes).
+-module(couchdbproxy_machines).
 -author('Benoît Chesneau <benoitc@e-engura.org').
 
 -behaviour(gen_server).
@@ -24,11 +24,11 @@
 -export([get_ip/1]).
          
 start_link() ->
-    gen_server:start_link({local, couchdbproxy_nodes}, couchdbproxy_nodes, [], []).
+    gen_server:start_link({local, couchdbproxy_machines}, couchdbproxy_machines, [], []).
     
 init([]) ->
-    Nodes = load_nodes(),
-    {ok, Nodes}.
+    Machines = load_machines(),
+    {ok, Machines}.
 
 
 handle_cast(_Msg, State) ->
@@ -44,21 +44,21 @@ terminate(_Reason, _State) ->
     ok.
 
 get_ip(NodeName) ->
-    gen_server:call(couchdbproxy_nodes, {ip, NodeName}).
+    gen_server:call(couchdbproxy_machines, {ip, NodeName}).
 
-handle_call({ip, NodeName}, _From, Nodes) ->
-    Ip = proplists:get_value(NodeName, Nodes),
-    {reply, Ip, Nodes}.
+handle_call({ip, NodeName}, _From, Machines) ->
+    Ip = proplists:get_value(NodeName, Machines),
+    {reply, Ip, Machines}.
 
 
-%% spec load_nodes() -> list
-%% @doc load nodes list
-load_nodes() ->
-    ViewPid = couchbeam_db:query_view(couchdbproxy, {"couchdbproxy", "nodes"}, []),
+%% spec load_machines() -> list
+%% @doc load machines list
+load_machines() ->
+    ViewPid = couchbeam_db:query_view(couchdbproxy, {"couchdbproxy", "machines"}, []),
     {_, _, _, Rows} = couchbeam_view:parse_view(ViewPid),
     couchbeam_view:close_view(ViewPid),
-    AllNodes = lists:foldl(fun(Row, NodesAcc) ->
+    AllMachines = lists:foldl(fun(Row, MachinesAcc) ->
        {_Id, NodeName, Ip} = Row,
-      [{NodeName, ?b2l(Ip)}|NodesAcc]
+      [{NodeName, ?b2l(Ip)}|MachinesAcc]
     end, [], Rows),
-    lists:reverse(AllNodes).
+    lists:reverse(AllMachines).

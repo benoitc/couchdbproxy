@@ -21,35 +21,37 @@
 -export([start_link/0]).
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
--export([get_alias/1, get_user/1, clean_user/1, clean_route/1]).
+-export([get_alias/1, get_node/1, clean_node/1, clean_route/1]).
          
 -record(routes,{
     aliases,
-    users}).         
+    nodes}).         
          
 start_link() ->
     gen_server:start_link({local, couchdbproxy_routes}, couchdbproxy_routes, [], []).
     
 init([]) ->
     Aliases = ets:new(couchdbproxy_aliases, [set, protected]),
-    Users = ets:new(couchdbproxy_users, [set, protected]),
-    Routes = #routes{aliases=Aliases, users=Users},
+    Nodes = ets:new(couchdbproxy_nodes, [set, protected]),
+    Routes = #routes{aliases=Aliases, nodes=Nodes},
     {ok, Routes}.
 
 get_alias(HostName) ->
     gen_server:call(couchdbproxy_routes, {get_alias, HostName}).
     
-get_user(UserName) ->
-    gen_server:call(couchdbproxy_routes, {get_user, UserName}).
+get_node(NodeName) when is_list(NodeName) ->
+    get_node(?l2b(NodeName));    
+get_node(NodeName) ->
+    gen_server:call(couchdbproxy_routes, {get_node, NodeName}).
     
-clean_user(UserName) ->
-    gen_server:cast(couchdbproxy_routes, {clean_user, UserName}).
+clean_node(NodeName) ->
+    gen_server:cast(couchdbproxy_routes, {clean_ndoe, NodeName}).
     
 clean_cname(HostName) ->
     gen_server:cast(couchdbproxy_routes, {clean_cname, HostName}).
     
-clean_route({user, UserName}) ->
-    clean_user(UserName);
+clean_route({node, NodeName}) ->
+    clean_node(NodeName);
 clean_route({cname, HostName}) ->
     clean_cname(HostName).
     
@@ -73,21 +75,21 @@ handle_call({get_alias, HostName}, _From, #routes{aliases=Aliases}=Routes) ->
     end,
     {reply, R, Routes};
     
-handle_call({get_user, UserName}, _From, #routes{users=Users}=Routes) ->
-    R = case ets:lookup(Users, UserName) of
+handle_call({get_node, NodeName}, _From, #routes{nodes=Nodes}=Routes) ->
+    R = case ets:lookup(Nodes, NodeName) of
     [] ->
-        ViewPid = couchbeam_db:query_view(couchdbproxy, {"couchdbproxy", "usernode"},
-                        [{"key", ?l2b(UserName)}, {"limit", 1}]),
+        ViewPid = couchbeam_db:query_view(couchdbproxy, {"couchdbproxy", "nodes_byname"},
+                        [{"key", NodeName}, {"limit", 1}]),
         case couchbeam_view:parse_view(ViewPid) of
         {_, _, _, []} -> 
             couchbeam_view:close_view(ViewPid),
             not_found;
         {_, _, _, [{_, _, V}]} ->
             couchbeam_view:close_view(ViewPid),
-            ets:insert(Users, {UserName, V}),
+            ets:insert(Nodes, {NodeName, V}),
             V
         end;
-    [{UserName, V1}] -> V1
+    [{NodeName, V1}] -> V1
     end,
     {reply, R, Routes}.
     
@@ -101,11 +103,11 @@ handle_cast({clean_cname, HostName}, #routes{aliases=Aliases}=Routes) ->
     end,
     {noreply, Routes};
 
-handle_cast({clean_user, UserName}, #routes{users=Users}=Routes) ->
-    case ets:lookup(Users, UserName) of
+handle_cast({clean_node, NodeName}, #routes{nodes=Nodes}=Routes) ->
+    case ets:lookup(Nodes, NodeName) of
         [] -> ok;
-        [{UserName, _V1}] ->
-        ets:delete(Users, UserName)
+        [{NodeName, _V1}] ->
+        ets:delete(Nodes, NodeName)
     end,
     {noreply, Routes};
         

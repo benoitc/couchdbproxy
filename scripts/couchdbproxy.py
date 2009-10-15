@@ -81,14 +81,14 @@ class CouchdbProxyCtl(object):
             self.server = Server(server_uri)
         self.db = self.server.get_or_create_db("couchdbproxy")
             
-    def add_node(self, nodename, ip):
+    def add_machine(self, name, ip):
         doc = {
-            "nodename": nodename,
+            "name": name,
             "ips": ip,
-            "type": "node"
+            "type": "machine"
         }
         
-        res = self.db.view("couchdbproxy/nodes_byname", key=nodename).one()
+        res = self.db.view("couchdbproxy/machines_byname", key=name).one()
         if res:
             doc.update({
                 '_id': res['id'],
@@ -97,23 +97,23 @@ class CouchdbProxyCtl(object):
         
         self.db.save_doc(doc)
         
-    def remove_node(self, nodename):
-        res = self.db.view("couchdbproxy/nodes_byname", key=nodename).one()
+    def remove_machine(self, name):
+        res = self.db.view("couchdbproxy/machines_byname", key=name).one()
         if res:
             del self.db[res['id']]
             return 
         print "notfound"
         
-    def add_user(self, nodename, username, port):
+    def add_node(self, machine, nodename, port):
         doc = {
-            "username": username,
             "nodename": nodename,
+            "machine": machine,
             "port": int(port),
-            "type": "user",
+            "type": "node",
             "active": True
         }
         
-        res = self.db.view("couchdbproxy/user", key=username).one()
+        res = self.db.view("couchdbproxy/nodes", key=nodename).one()
         if res:
             doc.update({
                 '_id': res['id'],
@@ -121,31 +121,23 @@ class CouchdbProxyCtl(object):
             })
         self.db.save_doc(doc)
         
-    def remove_user(self, username):
-        res = self.db.view("couchdbproxy/user", key=username).one()
+    def remove_node(self, nodename):
+        res = self.db.view("couchdbproxy/nodes", key=nodename).one()
         if res:
             del self.db[res['id']]
             return 
         print "notfound"
+
         
-    def _find_alias(self, hostname, path="/"):
-        res = self.db.view("couchdbproxy/alias", key=hostname.split('.'))
-        if res:
-            for row in res:
-                if path == path:
-                    return row
-        return False
-        
-    def add_alias(self, nodename, hostname, port, path="/"):
+    def add_alias(self, nodename, hostname, path="/"):
         doc = {
             "nodename": nodename,
             "hostname": hostname,
-            "port": int(port),
             "path": path,
             "type": "alias"
         }
         
-        res = self._find_alias(hostname, path)
+        res = self.db.view("couchdbproxy/alias", key=hostname.split('.')).one()
         if res:
             doc.update({
                 '_id': res['id'],
@@ -153,8 +145,8 @@ class CouchdbProxyCtl(object):
             })
         self.db.save_doc(doc)
 
-    def remove_alias(self, hostname, path="/"):
-        res = self._find_alias(hostname, path)
+    def remove_alias(self, hostname):
+        res = self.db.view("couchdbproxy/alias", key=hostname.split('.')).one()
         if res:
             del self.db[res['id']]
             return
@@ -167,35 +159,35 @@ def main():
 
 Command line utility to manage couchdbproxy.
 
-- Add a node :
+- Add a machine :
     
-    couchdbproxy add_node proxy_url nodename someip
+    couchdbproxy add_machine proxy_url name someip
     
-    proxy_url is url of the proxy couchdb node which maintain list of aliases, nodes & users.
-    nodename is a string without spaces in ascii
+    proxy_url is url of the proxy couchdb node which maintain list of aliases, machines & nodes.
+    machine is a string without spaces in ascii. It is the name you will give to a machine (vm or real hardware)
     ip is on the form 255.255.255.255
 
-- Remove node :
+- Remove machine :
+
+    couchdbproxy remove_machine proxy_url name
+    
+- Add/update a CouchDB node :
+
+    couchdbproxy add_node proxy_url machinename nodename port
+    
+    port is an integer and corrspond to installation. example: if you set a machine 
+    "mymachine" to ip "127.0.0.1" and create a couchdb node on port 5985 :
+    
+         couchdbproxy add_node http://127.0.0.1:5984 mymachine somenodename 5985
+    
+- remove a CouchDB node : 
 
     couchdbproxy remove_node proxy_url nodename
-    
-- Add/update user node :
-
-    couchdbproxy add_user proxy_url nodename username port
-    
-    port is an integer and corrspond to installation. example: if you set nodename 
-    "mynode" to ip "127.0.0.1" and create a user couchdb node on port 5985 :
-    
-         couchdbproxy add_user http://127.0.0.1:5984 mynode someusername 5985
-    
-- remove user node : 
-
-    couchdbproxy remove_user proxy_url username
     
     
 - Add/update alias
 
-    couchdbproxy add_alias proxy_url nodename hostname port path
+    couchdbproxy add_alias proxy_url nodename hostname path
     
 
     alias are a simple way to rewrite dbs, couchapp paths. By default 
@@ -207,57 +199,57 @@ Command line utility to manage couchdbproxy.
     
     example : 
     
-    alias mywebsite.com to the db testdb on port 5985 in nodename "mynode":
+    alias mywebsite.com to the db testdb  in node "mynode":
     
-    couchdbproxy add_alias http://127.0.0.1:5984 mynode mywebsite.com 5985 /testdb
+    couchdbproxy add_alias http://127.0.0.1:5984 mynode mywebsite.com /testdb
     
 
 - Remove alias
 
-    couchdbproxy remove_alias proxy_url alias, port
+    couchdbproxy remove_alias proxy_url alias
     
+    example :
+    
+    couchdbproxy remove_alias http://127.0.0.1:5984 mywebsite.com
     
 """)
     options, args = parser.parse_args()
     if len(args) < 1:
         return parser.error('incorrect number of arguments')
         
-    if args[0] == "add_node":
+    if args[0] == "add_machine":
         if len(args) < 4:
             return parser.error('incorrect number of arguments.')
         proxy = CouchdbProxyCtl(args[1])
-        proxy.add_node(args[2], args[3])
+        proxy.add_machine(args[2], args[3])
+    elif args[0] == "remove_machine":
+        if len(args) < 3:
+            return parser.error('incorrect number of arguments.')
+        proxy = CouchdbProxyCtl(args[1])
+        proxy.remove_machine(args[2])
+    elif args[0] == "add_node" or args[0] == "update_node":
+        if len(args) < 5:
+            return parser.error('incorrect number of arguments.')
+        proxy = CouchdbProxyCtl(args[1])
+        proxy.add_node(args[2], args[3], args[4])
     elif args[0] == "remove_node":
         if len(args) < 3:
             return parser.error('incorrect number of arguments.')
         proxy = CouchdbProxyCtl(args[1])
         proxy.remove_node(args[2])
-    elif args[0] == "add_user" or args[0] == "update_user":
-        if len(args) < 5:
-            return parser.error('incorrect number of arguments.')
-        proxy = CouchdbProxyCtl(args[1])
-        proxy.add_user(args[2], args[3], args[4])
-    elif args[0] == "remove_user":
-        if len(args) < 3:
-            return parser.error('incorrect number of arguments.')
-        proxy = CouchdbProxyCtl(args[1])
-        proxy.remove_user(args[2])
     elif args[0] == "add_alias" or args[0] == "update_alias":
-        if len(args) < 5:
+        if len(args) < 4:
             return parser.error('incorrect number of arguments.')
         proxy = CouchdbProxyCtl(args[1])
-        if len(args) == 6:
-            proxy.add_alias(args[2], args[3], args[4], args[5])
-        else:
+        if len(args) == 5:
             proxy.add_alias(args[2], args[3], args[4])
+        else:
+            proxy.add_alias(args[2], args[3])
     elif args[0] == "remove_alias":
         if len(args) < 3:
             return parser.error('incorrect number of arguments.')
         proxy = CouchdbProxyCtl(args[1])
-        if len(args) == 3:
-            proxy.remove_alias(args[2])
-        else:
-            proxy.remove_alias(args[2], args[3])
+        proxy.remove_alias(args[2])
     else:
         print "%s is an unknown command, sorry." % args[0]
 

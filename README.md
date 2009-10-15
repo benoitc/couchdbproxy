@@ -16,6 +16,8 @@ CouchdbProxy uses [couchbeam](http://bitbucket.org/benoitc/couchbeam/) to dialog
 
 ## Installation :
 
+*Users of 0.2 you can migrate your data to the new api by running ./scripts/migrate01.py. It will update your views and migrate data.*
+
 ### 1. requirements
 
   - bind 9 or any dns server that handle wildcards in ANAME.
@@ -91,19 +93,19 @@ You can add a node, username, alias dynamically thanks to the `couchdproxy` scri
 
 ### basic usage 
 
-The first thing you have to do is to setup an node. A node is a machine with an ip. You will launch couchdb user nodes on this machine on different ports. To add a node on localhost run :
+The first thing you have to do is to setup a machine You can launch couchdb nodes on this machine on different ports. To add a machine on localhost run :
 
-    ./couchdbproxy.py add_node http://127.0.0.1:5984 node0 127.0.0.1
+    ./couchdbproxy.py add_machine http://127.0.0.1:5984 m0 127.0.0.1
     
-Then you want to set a user couchdb node on node0 machine :
+Then you want to set a couchdb node on m0 machine :
 
-    ./couchdbproxy.py add_user http://127.0.0.1:5984 node0 benoitc 5985
+    ./couchdbproxy.py add_node http://127.0.0.1:5984 m0 benoitc 5985
     
 Connect on `http://benoitc.couchdbproxy.dev:8000` and you will fall in benoitc node.
 
-To remove this user :
+To remove this node :
 
-    ./couchdbproxy.py remove_user http://127.0.0.1:5984 benoitc
+    ./couchdbproxy.py remove_node http://127.0.0.1:5984 benoitc
     
 Get more usage by running command `./couchdbproxy.py --help`
 
@@ -111,11 +113,11 @@ Get more usage by running command `./couchdbproxy.py --help`
 
 There are cool url rewriting offered by couchdbproxy that allows you to access easily on a database or a couchapp. Ex :
 
-if `benoitc` user has a database `blog` on its node, you can access it with the url `http://blog.benoitc.couchdbproxy.dev:8000`. If ther is a couchapp in this database named `myblog`, you can also access to it with the url `http://myblog.blog.benoitc.couchdbproxy.dev:8000` .
+if `benoitc` user has a database `blog` on its node, you can access it with the url `http://blog.benoitc.couchdbproxy.dev:8000`. If there is a couchapp in this database named `myblog`, you can also access to it with the url `http://myblog.blog.benoitc.couchdbproxy.dev:8000` .
 
-Now imagine, you have a domain name called `benoitc.local` and want to access to the the couchapp `myblog` in `blog` db from benoitc's couchdb node. You could do it easily by pointing benoitc.local to your couchdbproxy IP and add an alias :
+Now imagine, you have a domain name called `benoitc.local` and want to access to the the couchapp `myblog` in `blog` db from benoitc's couchdb node. You could do it easily by pointing benoitc.local to your node and add an alias :
 
-    ./couchdbproxy.py add_alias http://127.0.0.1:5984 node0 benoitc.local 5985 /blog/_design/myblog
+    ./couchdbproxy.py add_alias http://127.0.0.1:5984 benoitc benoitc.local /blog/_design/myblog
     
 easy.
 

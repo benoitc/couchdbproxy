@@ -66,16 +66,16 @@ get_node(#proxy{mochi_req=Req, host=HostName, basename=BaseName}=State) ->
             		 		|| Part <- string:tokens(CName, ".")]),
             		case find_cname(CNameParts, RawPath) of
             		    api -> {api, State};
-            		    {UserName, Path} ->
-            		        case couchdbproxy_routes:get_user(UserName) of
-            	                [NodeName, Port] ->
-            	                    ProxyUrl = build_proxy_url(NodeName, Port),
+            		    {NodeName, Path} ->
+            		        case couchdbproxy_routes:get_node(NodeName) of
+            	                [MachineName, Port] ->
+            	                    ProxyUrl = build_proxy_url(MachineName, Port),
             	                    {Path0, _, _} = mochiweb_util:urlsplit_path(Path),
             	                    State1 = State#proxy{url        = ProxyUrl,
             	                                         path       = Path,
             	                                         path_parts = [list_to_binary(mochiweb_util:unquote(Part))
                                                                                      || Part <- string:tokens(Path0, "/")],
-            	                                         route      = {user, UserName}},
+            	                                         route      = {node, NodeName}},
             	                    {ok, State1};
             	                O -> O
                             end
@@ -87,30 +87,34 @@ get_node(#proxy{mochi_req=Req, host=HostName, basename=BaseName}=State) ->
 	
 find_cname(["www"|[]], _RawPath) ->
     api;
-find_cname([UserName|[]], RawPath) ->
-    {UserName, RawPath};
-find_cname([UserName, DbName|[]], RawPath) ->
+find_cname([NodeName|[]], RawPath) ->
+    {NodeName, RawPath};
+find_cname([NodeName, DbName|[]], RawPath) ->
     Path = lists:append(["/", DbName, RawPath]),
-    {UserName, Path};
-find_cname([UserName, DbName, DName|_], RawPath) ->
+    {NodeName, Path};
+find_cname([NodeName, DbName, DName|_], RawPath) ->
     Path = lists:append(["/", DbName, "/", "_design", "/", DName, RawPath]),
-    {UserName, Path}.
+    {NodeName, Path}.
     	
 find_alias(HostName, RawPath, State) ->
     case couchdbproxy_routes:get_alias(HostName) of
-    [NodeName, Port, Path] ->
-        ProxyUrl = build_proxy_url(NodeName, Port),
-        Path1 = case ?b2l(Path) of
-            "/" -> RawPath;
-            P -> lists:append([P, RawPath])
-        end,
-        {Path2, _, _} = mochiweb_util:urlsplit_path(Path1),
-        State1 = State#proxy{url          = ProxyUrl, 
-	                         path         = Path2,
-	                         path_parts   = [list_to_binary(mochiweb_util:unquote(Part))
-                                                    || Part <- string:tokens(Path2, "/")],
-	                         route        = {cname, HostName}},
-        {ok, State1};
+    [NodeName, Path] ->
+        case couchdbproxy_routes:get_node(NodeName) of
+            [MachineName, Port] ->
+                ProxyUrl = build_proxy_url(MachineName, Port),
+                Path1 = case ?b2l(Path) of
+                    "/" -> RawPath;
+                    P -> lists:append([P, RawPath])
+                end,
+                {Path2, _, _} = mochiweb_util:urlsplit_path(Path1),
+                State1 = State#proxy{url          = ProxyUrl, 
+        	                         path         = Path2,
+        	                         path_parts   = [list_to_binary(mochiweb_util:unquote(Part))
+                                                            || Part <- string:tokens(Path2, "/")],
+        	                         route        = {cname, HostName}},
+                {ok, State1};
+            Other -> Other
+        end;
     O -> O
     end.
     
@@ -131,7 +135,7 @@ absolute_uri(Req, Path) ->
 	"http://" ++ Host ++ Path.
 
 build_proxy_url(NodeName, Port) ->
-    Ip = couchdbproxy_nodes:get_ip(NodeName),
+    Ip = couchdbproxy_machines:get_ip(NodeName),
     ProxyUrl  = "http://" ++ Ip ++ ":" ++ integer_to_list(Port),
     ProxyUrl.
     
