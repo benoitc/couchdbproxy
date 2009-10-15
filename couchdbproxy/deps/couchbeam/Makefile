@@ -1,14 +1,12 @@
 ERL          ?= erl
 
 EBIN_DIRS    := $(wildcard deps/*/ebin)
-ERLC_FLAGS 	 := -W $(INCLUDE_DIRS:%=-I %) $(EBIN_DIRS:%=-pa %)
+ERLC_FLAGS := -W $(INCLUDE_DIRS:%=-I %) $(EBIN_DIRS:%=-pa %)
 APP          := couchbeam
 
-all: compile
+all: erl ebin/$(APP).app
 
-compile: beam ebin/$(APP).app
-
-beam:
+erl:
 	@$(ERL) -pa $(EBIN_DIRS) -noinput +B \
 	  -eval 'case make:all() of up_to_date -> halt(0); error -> halt(1) end.'
 
@@ -25,6 +23,7 @@ cover: all
 clean: 
 	@echo "removing:"
 	@rm -fv ebin/*.beam ebin/*.app
+	@rm -fv deps/lhttpc/ebin/*.beam deps/lhttpc/ebin/*.app
 
 ebin/$(APP).app: src/$(APP).app
 	@cp -v src/$(APP).app $@

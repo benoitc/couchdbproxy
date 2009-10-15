@@ -27,7 +27,6 @@ request(State) ->
     catch
         exit:{econnrefused, _} ->
             gateway_error(State, <<"couchdb node is down.">>)
-        
     end.
 
 do_request(#proxy{method=Method,url=Url,path=Path}=State) ->
