@@ -28,7 +28,7 @@
 -export([query_view/3, all_docs/2, all_docs_by_seq/2]).
 -export([fetch_attachment/3, fetch_attachment/4, put_attachment/5, put_attachment/6, 
          delete_attachment/3]).
--export([open/2, close/2, create/2, delete/2, open_or_create/2, register_db/2]).
+-export([open/2, close/2, create/2, delete/2, open_or_create/2]).
 -export([suscribe/2, suscribe/3]).
 
 %% @type node_info() = {Host::string(), Port::int()}
@@ -45,13 +45,13 @@
 %% @spec info(Db::pid()) -> list()
 %% @doc fetch information of Database
 info(Db) ->
-    gen_server:call(maybe_managed_db(Db), info, infinity).
+    gen_server:call(db_pid(Db), info, infinity).
 
 open(ConnectionPid, DbName) ->
     couchbeam_server:open_db(ConnectionPid, DbName).
 
 close(ConnectionPid, Db) ->
-    couchbeam_server:close_db(ConnectionPid, Db).
+    couchbeam_server:close_db(ConnectionPid, db_pid(Db)).
     
 create(ConnectionPid, DbName) ->
     couchbeam_server:create_db(ConnectionPid, DbName).
@@ -61,9 +61,6 @@ delete(ConnectionPid, DbName) ->
     
 open_or_create(ConnectionPid, DbName) ->
     couchbeam_server:open_or_create_db(ConnectionPid, DbName).
-    
-register_db(Name, {ConnectionPid, DbPid}) ->
-    couchbeam_manager:register_db(Name, {ConnectionPid, DbPid}).
     
 %%---------------------------------------------------------------------------
 %% Manage docs
@@ -75,7 +72,7 @@ open_doc(Db, DocId) ->
     open_doc(Db, DocId, []).
 
 open_doc(Db, DocId, Params) ->
-    gen_server:call(maybe_managed_db(Db), {open_doc, DocId, Params}, infinity).
+    gen_server:call(db_pid(Db), {open_doc, DocId, Params}, infinity).
    
 %% @spec save_doc(Db::pid(), Doc::json_object()) -> json_object() 
 %% @doc save a do with DocId. 
@@ -83,7 +80,7 @@ save_doc(Db, Doc) ->
     save_doc(Db, Doc, []).
 
 save_doc(Db, Doc, Params) ->
-    gen_server:call(maybe_managed_db(Db), {save_doc, Doc, Params}, infinity). 
+    gen_server:call(db_pid(Db), {save_doc, Doc, Params}, infinity). 
    
 %% @spec save_docs(Db::pid(), Docs::json_array()) -> json_object() 
 %% @doc bulk update
@@ -93,7 +90,7 @@ save_docs(Db, Docs) ->
 %% @spec save_docs(Db::pid(), Docs::json_array(), opts: lists()) -> json_object() 
 %% @doc bulk update with options, currently support only all_or_nothing.    
 save_docs(Db, Docs, Params) ->
-    gen_server:call(maybe_managed_db(Db), {save_docs, Docs, Params}, infinity). 
+    gen_server:call(db_pid(Db), {save_docs, Docs, Params}, infinity). 
     
 %% @spec delete_doc(Db::pid(), Doc::json_object()) -> json_object() 
 %% @doc delete a document
@@ -125,7 +122,7 @@ suscribe(Db, Consumer) ->
 %%                      {timeout, integer()}}
 %% @doc suscribe to db changes, wait for changes heartbeat 
 suscribe(Db, Consumer, Options) ->
-    gen_server:call(maybe_managed_db(Db), {suscribe_changes, Consumer, Options}, infinity).
+    gen_server:call(db_pid(Db), {suscribe_changes, Consumer, Options}, infinity).
   
 
 %%---------------------------------------------------------------------------
@@ -139,7 +136,7 @@ suscribe(Db, Consumer, Options) ->
 %% @doc query a view and return results depending on params
     
 query_view(Db, Vname, Params) ->
-    gen_server:call(maybe_managed_db(Db), {query_view, Vname, Params}, infinity). 
+    gen_server:call(db_pid(Db), {query_view, Vname, Params}, infinity). 
 
 %% @spec all_docs(Db::pid(), Params::list()) -> json_object()
 %% @doc This method has the same behavior as a view. Return all docs
@@ -166,7 +163,7 @@ fetch_attachment(Db, Doc, AName) ->
     fetch_attachment(Db, Doc, AName, []).
 
 fetch_attachment(Db, Doc, AName, Opts) ->
-    gen_server:call(maybe_managed_db(Db), {fetch_attachment, Doc, AName, Opts}, infinity). 
+    gen_server:call(db_pid(Db), {fetch_attachment, Doc, AName, Opts}, infinity). 
 
 %% @spec put_attachment(Db::pid(), Doc::json_obj(),
 %%      Content::attachment_content(), AName::string(), Length::string()) -> json_obj()
@@ -180,13 +177,13 @@ put_attachment(Db, Doc, Content, AName, Length) ->
 %%      Content::attachment_content(), AName::string(), Length::string(), ContentType::string()) -> json_obj()
 %% @doc put attachment attachment with ContentType fixed.
 put_attachment(Db, Doc, Content, AName, Length, ContentType) ->
-    gen_server:call(maybe_managed_db(Db), {put_attachment, Doc, Content, AName, Length, ContentType}, infinity). 
+    gen_server:call(db_pid(Db), {put_attachment, Doc, Content, AName, Length, ContentType}, infinity). 
     
 %% @spec delete_attachment(Db::pid(), Doc::json_obj(),
 %%      AName::string()) -> json_obj()
 %% @doc delete attachment
 delete_attachment(Db, Doc, AName) ->
-    gen_server:call(maybe_managed_db(Db), {delete_attachment, Doc, AName}, infinity). 
+    gen_server:call(db_pid(Db), {delete_attachment, Doc, AName}, infinity). 
 
 
 %%---------------------------------------------------------------------------
@@ -255,10 +252,7 @@ handle_call({save_docs, Docs, Opts}, _From, #db{couchdb=C,base=Base} = State) ->
         {error, Reason} -> Reason
     end,
     {reply, Res, State};
-    
 
-    
-    
 handle_call({query_view, Vname, Params}, _From, State) ->
     {ok, ViewPid} = gen_server:start_link(couchbeam_view, {Vname, Params, State}, []),
     {reply, ViewPid, State};
@@ -333,7 +327,6 @@ handle_call({suscribe_changes, Consumer, Options}, _From, #db{base=Base} = State
         H when is_integer(H) ->
             [{heartbeat, integer_to_list(H)}];
         H ->
-            io:format("params ~p ~n", [H]),
             [{heartbeat, H}]
     end,
     ExtraParams1 = ExtraParams ++ Options2,
@@ -346,13 +339,13 @@ handle_call({suscribe_changes, Consumer, Options}, _From, #db{base=Base} = State
     ChangeState = #change{db=State, path=Path, consumer_pid=Consumer},
     Pid = spawn_link(fun() -> suscribe_changes(ChangeState) end),
     {reply, Pid, State}.
-    
-    
+      
 handle_cast(_Msg, State) ->
     {noreply, State}.
     
 handle_info({'EXIT', _Pid, _Reason}, State) ->
     {stop, State};
+    
 handle_info(Msg, State) ->
     io:format("Bad message received for db ~s: ~p", [State#db.name, Msg]),
     exit({error, Msg}).
@@ -382,7 +375,6 @@ do_suscribe(#change{db=DbState, path=Path, consumer_pid=ConsumerPid}) ->
     #couchdb_params{host=Host, port=Port, ssl=Ssl, timeout=Timeout}=CouchdbState,
     Headers = [{"Accept", "application/json"}],
     Options = [{partial_download, [{window_size, infinity}]}],
-    io:format("Path ~p ~n", [Path]),
     case lhttpc:request(Host, Port, Ssl, Path, 'GET', Headers, <<>>, Timeout, Options) of
         {ok, {{_, _}, _, ResponseBody}} ->
             case ResponseBody of
@@ -426,9 +418,9 @@ maybe_docid(#db{server=ServerState}, {DocProps}) ->
     end.
     
 
-maybe_managed_db(Db) when is_pid(Db) ->
+db_pid(Db) when is_pid(Db) ->
     Db;
-maybe_managed_db(Db) ->
+db_pid(Db) ->
     couchbeam_manager:get_db(Db).
     
 get_option(Option, Options) ->

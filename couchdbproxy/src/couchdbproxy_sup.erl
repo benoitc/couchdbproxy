@@ -83,7 +83,7 @@ init([]) ->
     end,
     ProxyDb = proplists:get_value(proxy_db, ProxyConf, "couchdbproxy"),
     _ConnectionPid = couchbeam_server:start_connection(Params),
-    ok = couchbeam_db:register_db(couchdbproxy, {couchdbproxy, ProxyDb}),
+    couchbeam_server:open_db(couchdbproxy, {couchdbproxy, ProxyDb}),
 
     Processes = [{couchdbproxy_web,
                     {couchdbproxy_web, start, [WebConfig]},
