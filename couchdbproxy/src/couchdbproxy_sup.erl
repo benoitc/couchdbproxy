@@ -28,6 +28,7 @@
 %% @doc API for starting the supervisor.
 start_link() ->
     supervisor:start_link({local, ?MODULE}, ?MODULE, []).
+    
 
 %% @spec upgrade() -> ok
 %% @doc Add processes if necessary.
@@ -82,8 +83,9 @@ init([]) ->
             }
     end,
     ProxyDb = proplists:get_value(proxy_db, ProxyConf, "couchdbproxy"),
-    _ConnectionPid = couchbeam_server:start_connection(Params),
-    couchbeam_server:open_db(couchdbproxy, {couchdbproxy, ProxyDb}),
+    
+    ConnectionPid = couchbeam_server:start_connection(Params),
+    couchbeam_server:open_db(ConnectionPid, {couchdbproxy, ProxyDb}),
 
     Processes = [{couchdbproxy_web,
                     {couchdbproxy_web, start, [WebConfig]},

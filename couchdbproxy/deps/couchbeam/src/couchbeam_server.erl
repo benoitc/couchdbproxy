@@ -167,6 +167,7 @@ handle_call({open_db, DbName, Register}, _From, #server_state{prefix=Base,
         [] ->
             case couchbeam_resource:get(C, Base ++ DbName1, [], [], []) of
                 {ok, _} ->
+                    
                     {ok, DbPid} = gen_server:start_link(couchbeam_db, {DbName1, State}, []),
                     true = ets:insert(DbsNameTid, {DbName1, DbPid}),
                     true = ets:insert(DbsPidTid, {DbPid, DbName1}),
@@ -224,7 +225,7 @@ handle_call({delete_db, DbName}, _From, #server_state{prefix=Base,
             receive {'EXIT', Pid, _Reason} -> ok end,
             true = ets:delete(DbsNameTid, DbName),
             true = ets:delete(DbsPidTid, Pid),
-            %couchbeam_manager:unregister_db(DbName),
+            couchbeam_manager:unregister_db(DbName),
             couchbeam_resource:delete(C, Base ++ DbName, [], [], [])
     end,
     {reply, Resp, State};
@@ -238,7 +239,7 @@ handle_call({close_db, DbPid}, _From, #server_state{dbs_by_name=DbsNameTid,
             receive {'EXIT', _Pid, _Reason} -> ok end,
             true = ets:delete(DbsPidTid, DbPid),
             true = ets:delete(DbsNameTid, DbName),
-            %couchbeam_manager:unregister_db(DbName),
+            couchbeam_manager:unregister_db(DbName),
             ok
     end,
     {reply, Resp, State}.
@@ -252,7 +253,7 @@ handle_info({'EXIT', Pid, _Reason}, #server_state{dbs_by_name=DbsNameTid,
     [{DbName, Pid}] = ets:lookup(DbsNameTid, DbName),
     true = ets:delete(DbsPidTid, Pid),
     true = ets:delete(DbsNameTid, DbName),
-    %couchbeam_manager:unregister_db(DbName),
+    couchbeam_manager:unregister_db(DbName),
     {noreply, State};
     
 handle_info(_Info, State) ->

@@ -28,13 +28,18 @@ start_link() ->
     
 init([]) ->
     Machines = load_machines(),
+    
+    %couchbeam_db:suscribe(couchdbproxy, ?MODULE, [{heartbeat, "true"}]),
+    
     {ok, Machines}.
+
 
 
 handle_cast(_Msg, State) ->
     {noreply, State}.    
     
 handle_info(_Info, State) ->
+    io:format("fot ~p ~n", [_Info]),
     {noreply, State}.
     
 code_change(_OldVsn, State, _Extra) ->
