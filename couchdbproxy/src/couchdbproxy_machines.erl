@@ -22,16 +22,19 @@
 -export([init/1, handle_call/3, handle_cast/2, handle_info/2,
          terminate/2, code_change/3]).
 -export([get_ip/1]).
+
+
+-record(machines_state, {
+    machines=dict:new()
+}).
          
 start_link() ->
     gen_server:start_link({local, couchdbproxy_machines}, couchdbproxy_machines, [], []).
     
 init([]) ->
-    Machines = load_machines(),
-    
-    %couchbeam_db:suscribe(couchdbproxy, ?MODULE, [{heartbeat, "true"}]),
-    
-    {ok, Machines}.
+    InitialState = load_machines(),
+    couchbeam_db:suscribe(couchdbproxy, ?MODULE, [{heartbeat, "true"}]),
+    {ok, InitialState}.
 
 
 
@@ -39,7 +42,7 @@ handle_cast(_Msg, State) ->
     {noreply, State}.    
     
 handle_info(_Info, State) ->
-    io:format("fot ~p ~n", [_Info]),
+    io:format("got ~p ~n", [_Info]),
     {noreply, State}.
     
 code_change(_OldVsn, State, _Extra) ->
@@ -51,9 +54,12 @@ terminate(_Reason, _State) ->
 get_ip(NodeName) ->
     gen_server:call(couchdbproxy_machines, {ip, NodeName}).
 
-handle_call({ip, NodeName}, _From, Machines) ->
-    Ip = proplists:get_value(NodeName, Machines),
-    {reply, Ip, Machines}.
+handle_call({ip, Name}, _From, #machines_state{machines=Machines}=State) ->
+    Ip = case dict:find(Name, Machines) of
+        {ok, Ip1} -> {ok, Ip1};
+        error -> not_found
+    end,
+    {reply, Ip, State}.
 
 
 %% spec load_machines() -> list
@@ -63,7 +69,9 @@ load_machines() ->
     {_, _, _, Rows} = couchbeam_view:parse_view(ViewPid),
     couchbeam_view:close_view(ViewPid),
     AllMachines = lists:foldl(fun(Row, MachinesAcc) ->
-       {_Id, NodeName, Ip} = Row,
-      [{NodeName, ?b2l(Ip)}|MachinesAcc]
+       {_Id, Name, Ip} = Row,
+      [{Name, ?b2l(Ip)}|MachinesAcc]
     end, [], Rows),
-    lists:reverse(AllMachines).
+    Machines = dict:from_list(lists:reverse(AllMachines)),
+    State = #machines_state{machines=Machines},
+    State.

@@ -69,16 +69,20 @@ get_node(#proxy{mochi_req=Req, host=HostName, basename=BaseName}=State) ->
             		    {NodeName, Path} ->
             		        case couchdbproxy_routes:get_node(NodeName) of
             	                [MachineName, Port] ->
-            	                    ProxyUrl = build_proxy_url(MachineName, Port),
-            	                    {Path0, _, _} = mochiweb_util:urlsplit_path(Path),
-            	                    State1 = State#proxy{url        = ProxyUrl,
-            	                                         path       = Path,
-            	                                         path_parts = [list_to_binary(mochiweb_util:unquote(Part))
-                                                                                     || Part <- string:tokens(Path0, "/")],
-            	                                         route      = {node, NodeName}},
-            	                    {ok, State1};
+            	                    case build_proxy_url(MachineName, Port) of
+            	                        {ok, ProxyUrl} ->
+            	                            {Path0, _, _} = mochiweb_util:urlsplit_path(Path),
+                    	                    State1 = State#proxy{url        = ProxyUrl,
+                    	                                         path       = Path,
+                    	                                         path_parts = [list_to_binary(mochiweb_util:unquote(Part))
+                                                                                             || Part <- string:tokens(Path0, "/")],
+                    	                                         route      = {node, NodeName}},
+                    	                    {ok, State1};
+                    	                O -> O
+                    	            end;
             	                O -> O
                             end
+                            
                     end;
             	_ ->
                     find_alias(HostName1, RawPath, State)
@@ -101,23 +105,25 @@ find_alias(HostName, RawPath, State) ->
     [NodeName, Path] ->
         case couchdbproxy_routes:get_node(NodeName) of
             [MachineName, Port] ->
-                ProxyUrl = build_proxy_url(MachineName, Port),
-                Path1 = case ?b2l(Path) of
-                    "/" -> RawPath;
-                    P -> lists:append([P, RawPath])
-                end,
-                {Path2, _, _} = mochiweb_util:urlsplit_path(Path1),
-                State1 = State#proxy{url          = ProxyUrl, 
-        	                         path         = Path2,
-        	                         path_parts   = [list_to_binary(mochiweb_util:unquote(Part))
-                                                            || Part <- string:tokens(Path2, "/")],
-        	                         route        = {cname, HostName}},
-                {ok, State1};
+                case build_proxy_url(MachineName, Port) of
+                    {ok, ProxyUrl} ->
+                        Path1 = case ?b2l(Path) of
+                            "/" -> RawPath;
+                            P -> lists:append([P, RawPath])
+                        end,
+                        {Path2, _, _} = mochiweb_util:urlsplit_path(Path1),
+                        State1 = State#proxy{url          = ProxyUrl, 
+                	                         path         = Path2,
+                	                         path_parts   = [list_to_binary(mochiweb_util:unquote(Part))
+                                                                    || Part <- string:tokens(Path2, "/")],
+                	                         route        = {cname, HostName}},
+                        {ok, State1};
+                    Other -> Other
+                end;
             Other -> Other
         end;
     O -> O
     end.
-    
     
 get_option(Option, Options) ->
     {proplists:get_value(Option, Options), proplists:delete(Option, Options)}.
@@ -134,8 +140,11 @@ absolute_uri(Req, Path) ->
 	Host = host(Req),
 	"http://" ++ Host ++ Path.
 
-build_proxy_url(NodeName, Port) ->
-    Ip = couchdbproxy_machines:get_ip(NodeName),
-    ProxyUrl  = "http://" ++ Ip ++ ":" ++ integer_to_list(Port),
-    ProxyUrl.
+build_proxy_url(MachineName, Port) ->
+    case couchdbproxy_machines:get_ip(MachineName) of
+        {ok, Ip} ->
+            ProxyUrl  = "http://" ++ Ip ++ ":" ++ integer_to_list(Port),
+            {ok, ProxyUrl};
+        O -> O
+    end.
     
