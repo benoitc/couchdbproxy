@@ -12,6 +12,7 @@
 	  couchdbproxy_revproxy,
 	  couchdbproxy_machines,
 	  couchdbproxy_routes,
+	  couchdbproxy_listener,
 	  couchdbproxy_util
   ]},
   {registered, [couchdbproxy_sup]},

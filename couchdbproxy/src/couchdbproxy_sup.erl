@@ -57,6 +57,9 @@ init([]) ->
                          [filename:dirname(code:which(?MODULE)),
                           "..", "priv", "proxy.conf"])),
                           
+    SinceFileName = filename:join([filename:dirname(code:which(?MODULE)),
+                        "..", "priv", "since.st"]),
+                          
     Ip = case proplists:get_value(ip, ProxyConf) of
         undefined ->
             case os:getenv("MOCHIWEB_IP") of false -> "0.0.0.0"; Any -> Any end;
@@ -95,5 +98,8 @@ init([]) ->
                     permanent, 5000, worker, [couchdbproxy_machines]},
                 {couchdbproxy_routes,
                     {couchdbproxy_routes, start_link, []},
-                    permanent, 5000, worker, [couchdbproxy_routes]}],
+                    permanent, 5000, worker, [couchdbproxy_routes]},
+                {couchdbproxy_listener,
+                    {couchdbproxy_listener, start_link, [SinceFileName]},
+                    permanent, infinity, supervisor, [couchdbproxy_listener]}],
     {ok, {{one_for_one, 10, 10}, Processes}}.

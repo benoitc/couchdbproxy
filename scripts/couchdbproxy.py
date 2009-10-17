@@ -91,8 +91,8 @@ class CouchdbProxyCtl(object):
         res = self.db.view("couchdbproxy/machines_byname", key=name).one()
         if res:
             doc.update({
-                '_id': res['id'],
-                '_rev': res['rev']
+                '_id': res['value']['_id'],
+                '_rev': res['value']['_rev']
             })
         
         self.db.save_doc(doc)
@@ -116,8 +116,8 @@ class CouchdbProxyCtl(object):
         res = self.db.view("couchdbproxy/nodes", key=nodename).one()
         if res:
             doc.update({
-                '_id': res['id'],
-                '_rev': res['rev']
+                '_id': res['value']['_id'],
+                '_rev': res['value']['_rev']
             })
         self.db.save_doc(doc)
         
@@ -140,8 +140,8 @@ class CouchdbProxyCtl(object):
         res = self.db.view("couchdbproxy/alias", key=hostname.split('.')).one()
         if res:
             doc.update({
-                '_id': res['id'],
-                '_rev': res['rev']
+                '_id': res['value']['_id'],
+                '_rev': res['value']['_rev']
             })
         self.db.save_doc(doc)
 
