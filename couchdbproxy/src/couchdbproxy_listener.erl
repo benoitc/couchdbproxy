@@ -116,11 +116,17 @@ parse_change([{Props}], Server) ->
             NodeName = proplists:get_value(<<"nodename">>, DocProps),
             MachineName = proplists:get_value(<<"machine">>, DocProps),
             Port = proplists:get_value(<<"port">>, DocProps),
+            Active = proplists:get_value(<<"active">>, DocProps),
             case Deleted of
                 true ->
                     couchdbproxy_routes:clean_node(NodeName);
                 false ->
-                    couchdbproxy_routes:update_node(NodeName, MachineName, Port)
+                    case Active of
+                        true ->
+                            couchdbproxy_routes:update_node(NodeName, MachineName, Port);
+                        false ->
+                            couchdbproxy_routes:clean_node(NodeName)
+                    end
             end;
         <<"alias">> ->
             NodeName = proplists:get_value(<<"nodename">>, DocProps),
