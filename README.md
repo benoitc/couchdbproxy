@@ -109,18 +109,18 @@ script in `scripts` folder.
 The first thing you have to do is to setup a machine You can launch CouchDB
 nodes on this machine on different ports. To add a machine on localhost run:
 
-    ./CouchDBProxy.py add_machine http://127.0.0.1:5984 m0 127.0.0.1
+    ./couchdbproxy.py add_machine http://127.0.0.1:5984 m0 127.0.0.1
     
 Then you want to set a couchdb node on m0 machine:
 
-    ./CouchDBProxy.py add_node http://127.0.0.1:5984 m0 benoitc 5985
+    ./couchdbproxy.py add_node http://127.0.0.1:5984 m0 benoitc 5985
     
     Connect on `http://benoitc.couchdbproxy.dev:8000` and you will fall in
     benoitc node.
 
 To remove this node :
 
-    ./CouchDBProxy.py remove_node http://127.0.0.1:5984 benoitc
+    ./couchdbproxy.py remove_node http://127.0.0.1:5984 benoitc
     
 Get more usage by running command `./couchdbproxy.py --help`
 
