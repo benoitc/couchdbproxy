@@ -28,7 +28,8 @@
     changes_pid=undefined,
     loop_pid=undefined,
     since=nil,
-    fd
+    fd,
+    retry=0
 }).
 
               
@@ -51,22 +52,35 @@ start_loop(Since) ->
     Server = self(),
     LoopPid = proc_lib:spawn_link(?MODULE, changes_loop, [Server]),
     Pid = couchbeam_db:suscribe(couchdbproxy, LoopPid, [{heartbeat, "true"}, {since, Since}]),
-    erlang:monitor(process, Pid),
     Server ! {listen, LoopPid, Pid},
     ok.
     
-
 changes_loop(Server) ->
     receive
+        {body_pid, Pid} ->
+            erlang:monitor(process, Pid),
+            Server ! start_listen,
+            changes_loop(Server);
         {change, Change} ->
             io:format("got change ~p ~n", [Change]),
             spawn_link(fun() -> parse_change(Change, Server) end),
-            changes_loop(Server)
+            changes_loop(Server);
+        {'DOWN', _, _, _, _} ->
+            gen_server:cast(Server, restart_loop);
+        {'EXIT', {econnrefused, _}} ->
+            gen_server:cast(Server, restart_loop);
+        Else ->
+            io:format("ici ~p ~n", [Else])
     end.
 
-
+    
 handle_call(_Msg, _, State) ->
     {reply, ok, State}.
+
+handle_cast(restart_loop, #listener{since=Since,retry=Wait}=State) ->
+    timer:sleep(Wait),
+    start_loop(Since),
+    {noreply, State#listener{retry=Wait+5000}};
     
 handle_cast(_Msg, State) ->
     {noreply, State}.    
@@ -77,6 +91,8 @@ handle_info({new_change, Seq}, #listener{fd=Fd}=State) ->
     file:pwrite(Fd, 0, list_to_binary(integer_to_list(Seq))),
     file:sync(Fd),
     {noreply, State#listener{since=Seq}};
+handle_info(start_listen, State) ->
+    {noreply, State#listener{retry=0}};
 handle_info(_Info, State) ->
     io:format("got ~p ~n", [_Info]),
     {noreply, State}.
