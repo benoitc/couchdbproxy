@@ -61,8 +61,10 @@ changes_loop(Server) ->
             erlang:monitor(process, Pid),
             Server ! start_listen,
             changes_loop(Server);
+        body_done ->
+            gen_server:cast(Server, restart_loop);
         {change, Change} ->
-            io:format("got change ~p ~n", [Change]),
+            io:format("got change: ~p ~n", [Change]),
             spawn_link(fun() -> parse_change(Change, Server) end),
             changes_loop(Server);
         {'DOWN', _, _, _, _} ->
@@ -70,7 +72,8 @@ changes_loop(Server) ->
         {'EXIT', {econnrefused, _}} ->
             gen_server:cast(Server, restart_loop);
         Else ->
-            io:format("ici ~p ~n", [Else])
+            io:format("changes loop: ~p ~n", [Else]),
+            gen_server:cast(Server, restart_loop)
     end.
 
     
