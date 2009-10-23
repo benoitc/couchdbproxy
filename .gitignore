@@ -14,7 +14,9 @@ configure
 autom4te.cache
 build-aux
 *.diff
+*.hg*
 
+couchdbproxy/priv/since.st
 couchdbproxy/doc/*.html
 couchdbproxy/deps/lhttpc/doc/*.html
 couchdbproxy/deps/couchbeam/doc/*.html

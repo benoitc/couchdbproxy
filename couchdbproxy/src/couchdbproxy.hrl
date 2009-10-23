@@ -30,7 +30,7 @@
     response_headers,
     response_body}).
 
--define(CPVSN, "0.1").
+-define(CPVSN, "0.3").
 -define(QUIP, "CouchDB Proxy").
 
 -record(url, {abspath, host, port, username, password, path, protocol}).

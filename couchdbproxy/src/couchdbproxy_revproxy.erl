@@ -161,7 +161,6 @@ send_chunked_body(#proxy{mochi_req=MochiReq}=State, CurrentState) ->
         send_chunked_body(State, NextState2)
     end.
 
-    
 read_sub_chunks(Length, Req, Acc) when Length > ?STREAM_CHUNK_SIZE ->
     Bin = Req:recv(?STREAM_CHUNK_SIZE),
     read_sub_chunks(Length - ?STREAM_CHUNK_SIZE, Req, [Bin|Acc]);
