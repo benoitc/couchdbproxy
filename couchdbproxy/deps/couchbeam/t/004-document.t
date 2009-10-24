@@ -3,7 +3,7 @@
 %%! -pa ./ebin
 
 main(_) ->
-    etap:plan(9),
+    etap:plan(26),
     start_app(),
     case (catch test()) of
         ok ->
@@ -72,5 +72,37 @@ test() ->
            _ -> false
        end, "save doc in managed db ok"),
     
+    Doc4 = {[{<<"a">>, 1}]},
+    etap:is(couchbeam_doc:get_value(<<"a">>, Doc4), 1, "get value ok"),
+    etap:is(couchbeam_doc:get_value("a", Doc4), 1, "get value from string ok"),
+    etap:is(couchbeam_doc:get_value("b", Doc4), undefined, "get undefined value ok"),
+    etap:is(couchbeam_doc:get_value("b", Doc4, nil), nil, "get undefined value with default ok"),
+    Doc5 = couchbeam_doc:set_value("b", 1, Doc4),
+    etap:is(couchbeam_doc:get_value("b", Doc5), 1, "set value ok"),
+    Doc6 = couchbeam_doc:set_value("b", 0, Doc5),
+    etap:is(couchbeam_doc:get_value("b", Doc6), 0, "update value ok"),
+    Doc7 = couchbeam_doc:delete_value("b", Doc6),
+    etap:is(couchbeam_doc:get_value("b", Doc7), undefined, "delete value ok"),
+    Doc8 = couchbeam_doc:extend([{<<"b">>, 1}, {<<"c">>, 1}], Doc7),
+    etap:is(couchbeam_doc:get_value("b", Doc8), 1, "set value ok"),
+    etap:is(couchbeam_doc:get_value("c", Doc8), 1, "set value ok"),
+    
+    Doc9 = {[{<<"_id">>, <<"~!@#$%^&*()_+-=[]{}|;':,./<> ?">>}]},
+    Doc10 = couchbeam_db:save_doc(Db, Doc9),
+    Doc101 = couchbeam_db:open_doc(Db, <<"~!@#$%^&*()_+-=[]{}|;':,./<> ?">>),
+    etap:ok(case Doc10 of
+        {_} -> true;
+        _ -> false
+        end, "doc with special char created ok"),
+    etap:is(couchbeam_doc:get_value(<<"_id">>, Doc101), <<"~!@#$%^&*()_+-=[]{}|;':,./<> ?">>, "doc with special char created ok 2"),
+    
+    Doc11 = {[{<<"f">>, 1}]},
+    etap:not_ok(couchbeam_doc:is_saved(Doc11), "document isn't saved ok"),
+    etap:is(couchbeam_doc:get_id(Doc11), undefined, "document id is undefined ok"),
+    etap:is(couchbeam_doc:get_rev(Doc11), undefined, "document rev is undefined ok"),
+    Doc12 = couchbeam_db:save_doc(Db, Doc11),
+    etap:ok(couchbeam_doc:is_saved(Doc12), "document saved ok"),
+    etap:isnt(couchbeam_doc:get_id(Doc12), undefined, "document id  defined ok"),
+    etap:isnt(couchbeam_doc:get_rev(Doc12), undefined, "document rev is defined ok"),
     ok.
     

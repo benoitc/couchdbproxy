@@ -14,6 +14,9 @@
 %% See the License for the specific language governing permissions and
 %% limitations under the License.
 
+-type header() :: {string() | atom(), string()}.
+-type headers() :: [header()].
+
 -record(couchdb_params, {
     host        = "127.0.0.1" :: string(),
     port        = 5984 :: integer(),
@@ -76,6 +79,3 @@
 }).
     
 -define(USER_AGENT, "couchbeam/0.1").
-
--define(b2l(V), binary_to_list(V)).
--define(l2b(V), list_to_binary(V)).

@@ -21,6 +21,8 @@
 
 -include("couchbeam.hrl").
 
+-define(STREAM_CHUNK_SIZE, 16384). %% 16384
+
 -export([init/1, terminate/2, code_change/3, handle_call/3, handle_cast/2,
          handle_info/2]).
 -export([info/1, open_doc/2, open_doc/3, save_doc/2, save_doc/3, save_docs/2,
@@ -30,6 +32,7 @@
          delete_attachment/3]).
 -export([open/2, close/2, create/2, delete/2, open_or_create/2]).
 -export([suscribe/2, suscribe/3]).
+-export([encode_docid/1]).
 
 %% @type node_info() = {Host::string(), Port::int()}
 %% @type iolist() = [char() | binary() | iolist()]
@@ -72,7 +75,7 @@ open_doc(Db, DocId) ->
     open_doc(Db, DocId, []).
 
 open_doc(Db, DocId, Params) ->
-    gen_server:call(db_pid(Db), {open_doc, DocId, Params}, infinity).
+    gen_server:call(db_pid(Db), {open_doc, encode_docid(DocId), Params}, infinity).
    
 %% @spec save_doc(Db::pid(), Doc::json_object()) -> json_object() 
 %% @doc save a do with DocId. 
@@ -116,10 +119,14 @@ delete_docs(Db, Docs, Opts) ->
 suscribe(Db, Consumer) ->
     suscribe(Db, Consumer, []).
     
-%% @spec suscribe(Db::pid(), Consumer::pid(), Options::ChangeOptions()) -> pid()
-%% @type ChangeOptions [ChangeOption]
-%%       ChangeOption = {heartbeat, integer | string} |
-%%                      {timeout, integer()}}
+%% @spec suscribe(Db, Consumer, Options) -> Result
+%% Db = database()
+%% Consumer = pid()
+%% Options = ChangeOptions
+%% Result = pid()
+%% Options = [ChangeOption]
+%% ChangeOption = {heartbeat, integer | string} |
+%%                      {timeout, integer()}
 %% @doc suscribe to db changes, wait for changes heartbeat 
 suscribe(Db, Consumer, Options) ->
     gen_server:call(db_pid(Db), {suscribe_changes, Consumer, Options}, infinity).
@@ -156,28 +163,46 @@ all_docs_by_seq(Db, Params) ->
 %%---------------------------------------------------------------------------
 
  
-%% @spec fetch_attachment(Db::pid(), Doc::json_obj(), 
+%% @spec fetch_attachment(Db::pid(), DocId::string(), 
 %%                  AName::string()) -> iolist()
 %% @doc fetch attachment
-fetch_attachment(Db, Doc, AName) ->
-    fetch_attachment(Db, Doc, AName, []).
+fetch_attachment(Db, DocId, AName) ->
+   fetch_attachment(Db, DocId, AName, false).
 
-fetch_attachment(Db, Doc, AName, Opts) ->
-    gen_server:call(db_pid(Db), {fetch_attachment, Doc, AName, Opts}, infinity). 
 
-%% @spec put_attachment(Db::pid(), Doc::json_obj(),
-%%      Content::attachment_content(), AName::string(), Length::string()) -> json_obj()
-%% @type attachment_content() = string() |binary() | fun_arity_0() | {fun_arity_1(), initial_state()}
-%% @doc put attachment attachment, It will try to guess mimetype
-put_attachment(Db, Doc, Content, AName, Length) ->
-    ContentType = couchbeam_util:guess_mime(AName),
-    put_attachment(Db, Doc, Content, AName, Length, ContentType).
+%% @spec fetch_attachment(Db::pid(), DocId::string(), 
+%%                  AName::string(),
+%%                  Streaming::boolean()) -> attachment()
+%% @type attachment() = iolist() | pid()
+%% @doc fetch attachment. 
+%% should be use to fetch the body
+fetch_attachment(Db, DocId, AName, Streaming)  ->
     
-%% @spec put_attachment(Db::pid(), Doc::json_obj(),
+    {C, Path, Options} = gen_server:call(db_pid(Db), {fetch_attachment, 
+                encode_docid(DocId), AName, Streaming}),
+    case couchbeam_resource:get(C, Path, [], [], Options) of
+        {error, Reason} -> Reason;
+        {ok, R} when is_pid(R) ->
+            true = unlink(R),
+            R;
+        {ok, R} -> R    
+    end.
+        
+
+%% @spec put_attachment(Db::pid(), DocId::doc(),
+%%      Content::attachment_content(), AName::string(), Length::string()) -> json_obj()
+%% @type attachment_content() = string() |binary() | fun_arity_0() | {fun_arity_0(), initial_state()}
+%% @type doc() = json_obj() | {DocID, Rev}
+%% @doc put attachment attachment, It will try to guess mimetype
+put_attachment(Db, DocId, Content, AName, Length) ->
+    ContentType = couchbeam_util:guess_mime(AName),
+    put_attachment(Db, DocId, Content, AName, Length, ContentType).
+    
+%% @spec put_attachment(Db::pid(), Doc::doc(),
 %%      Content::attachment_content(), AName::string(), Length::string(), ContentType::string()) -> json_obj()
 %% @doc put attachment attachment with ContentType fixed.
-put_attachment(Db, Doc, Content, AName, Length, ContentType) ->
-    gen_server:call(db_pid(Db), {put_attachment, Doc, Content, AName, Length, ContentType}, infinity). 
+put_attachment(Db, DocId, Content, AName, Length, ContentType) ->
+    gen_server:call(db_pid(Db), {put_attachment, DocId, Content, AName, Length, ContentType}, infinity). 
     
 %% @spec delete_attachment(Db::pid(), Doc::json_obj(),
 %%      AName::string()) -> json_obj()
@@ -185,6 +210,17 @@ put_attachment(Db, Doc, Content, AName, Length, ContentType) ->
 delete_attachment(Db, Doc, AName) ->
     gen_server:call(db_pid(Db), {delete_attachment, Doc, AName}, infinity). 
 
+
+encode_docid(DocId) when is_binary(DocId) ->
+    encode_docid(binary_to_list(DocId));
+encode_docid(DocId) ->
+    case DocId of
+        "_design/" ++ Rest ->
+            Rest1 = encode_docid(Rest),
+            "_design/" ++ Rest1;
+        _ ->
+            couchbeam_util:url_encode(DocId)
+    end.
 
 %%---------------------------------------------------------------------------
 %% gen_server callbacks
@@ -220,8 +256,7 @@ handle_call({save_doc, Doc, Params}, _From, #db{server=ServerState, couchdb=C,
         undefined ->
             #server_state{uuids_pid=UuidsPid} = ServerState,
             couchbeam_uuids:next_uuid(UuidsPid);
-        Id1 when is_list(Id1) -> Id1;
-        Id1 -> ?b2l(Id1)
+        Id1 -> encode_docid(Id1)
     end,
     Path = Base ++ "/" ++ DocId,
     Body = couchbeam:json_encode(Doc),
@@ -257,13 +292,16 @@ handle_call({query_view, Vname, Params}, _From, State) ->
     {ok, ViewPid} = gen_server:start_link(couchbeam_view, {Vname, Params, State}, []),
     {reply, ViewPid, State};
      
-handle_call({fetch_attachment, DocId, AName, Opts}, _From, #db{couchdb=C, base=Base}=State) ->
+handle_call({fetch_attachment, DocId, AName, Streaming}, From, #db{couchdb=C, base=Base}=State) ->
     Path = io_lib:format("~s/~s/~s", [Base, DocId, AName]),
-    Resp = case couchbeam_resource:get(C, Path, [], [], Opts) of
-        {error, Reason} -> Reason;
-        {ok, R} -> R
+    Options = case Streaming of     
+        true ->
+            [{partial_download, [{window_size, infinity}, {part_size, ?STREAM_CHUNK_SIZE}]}];
+        false -> []
     end,
-    {reply, Resp, State};
+
+    
+    {reply, {C, Path, Options}, State};
 
 handle_call({put_attachment, Doc, Content, AName, Length, ContentType}, _From, 
             #db{couchdb=C, base=Base}=State) ->
