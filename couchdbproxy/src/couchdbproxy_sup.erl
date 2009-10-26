@@ -53,28 +53,23 @@ upgrade() ->
 %% @doc supervisor callback.
 init([]) ->
     
-    {ok, ProxyConf} = file:consult(filename:join(
-                         [filename:dirname(code:which(?MODULE)),
-                          "..", "priv", "proxy.conf"])),
-                          
     SinceFileName = filename:join([filename:dirname(code:which(?MODULE)),
                         "..", "priv", "since.st"]),
                           
-    Ip = case proplists:get_value(ip, ProxyConf) of
+    Ip = case couchdbproxy:get_app_env(couchdbproxy_ip) of
         undefined ->
             case os:getenv("MOCHIWEB_IP") of false -> "0.0.0.0"; Any -> Any end;
         Ip1 -> Ip1
     end,
-    Port = proplists:get_value(port, ProxyConf, 8000),
-                       
-    BaseHostname = proplists:get_value(hostname, ProxyConf, "couchdbproxy.dev"),
+    Port = couchdbproxy:get_app_env(couchdbproxy_port, 8000),              
+    BaseHostname = couchdbproxy:get_app_env(couchdbproxy_hostname, "couchdbproxy.dev"),
     WebConfig = [
          {ip, Ip},
                  {port, Port},
                  {docroot, couchdbproxy_deps:local_path(["priv", "www"])},
                  {hostname, BaseHostname}],
 
-    Params = case proplists:get_value(proxy_hostconfig, ProxyConf) of
+    Params = case couchdbproxy:get_app_env(couchdbproxy_couchdb_params) of
         undefined -> #couchdb_params{};
         HostConfig ->
             #couchdb_params{
@@ -85,8 +80,7 @@ init([]) ->
                 name=couchdbproxy
             }
     end,
-    ProxyDb = proplists:get_value(proxy_db, ProxyConf, "couchdbproxy"),
-    
+    ProxyDb = couchdbproxy:get_app_env(couchdbproxy_db, "couchdbproxy"),
     ConnectionPid = couchbeam_server:start_connection(Params),
     couchbeam_server:open_db(ConnectionPid, {couchdbproxy, ProxyDb}),
 

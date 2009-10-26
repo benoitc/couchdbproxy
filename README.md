@@ -67,20 +67,22 @@ couchdbproxy.dev.zone:
 ### 3. Configure Master Couchdb Node.
 
 This node will be used to store and retrieve dynamically nodes for one user and
-cname. Install CouchDB somewhere by following [CouchDB installation](http://wiki.apache.org/couchdb/Installation) and set proxy.conf in
-CouchDBProxy/priv folder:
+cname. Install CouchDB somewhere by following [CouchDB installation](http://wiki.apache.org/couchdb/Installation) and set your en configuration file. All configuration is set in couchdbproxy application environment at startup. One full configuration file is in config:
 
-    % base hostname used for rewriting
-    {hostname, "couchdbproxy.dev"}.
-    {port, 8000}.
+    {couchdbproxy_hostname, "couchdbproxy.dev"}. % base hostname used for rewriting
+    {couchdbproxy_name, couchdbproxy}. % erlang node name
+    {couchdbproxy_port, 8000}. % port on which couchdbproxy listen
+    {couchdbproxy_ip, "0.0.0.0"}. % ip of couchdbproxy
+    {couchdbproxy_cookie, 'couchdbproxy_cookie_default'}. % erlang cookiue
+    {couchbeam_heart_command, "start.sh"}. % heartbeat command
 
     % params of couchdb node used to maintain connections user-couchdb
-    {proxy_hostconfig, [{host, "127.0.0.1"}, {port, 5984}]}.
-    {proxy_db, "couchdbproxy"}.
+    {couchdbproxy_couchdb_params, [{host, "127.0.0.1"}, {port, 5984}]}. % parameters of master couchdb 
+    {couchdbproxy_db, "couchdbproxy"}. % couchdb database
     
-`hostname` is the basename used to detect CNAME and user urls. `port` is the port on which you want to run CouchDBProxy.
+`couchdbproxy_hostname` is the basename used to detect CNAME and user urls. `couchdbproxy_port` is the port on which you want to run CouchDBProxy.
     
-if you want to add an admin username/password do, change proxy_hostconfig accordingly:
+if you want to add an admin username/password do, change `couchdbproxy_couchdb_params` accordingly:
 
     {proxy_hostconfig, [{host, "127.0.0.1"}, {port, 5984}, {username, "someuser"}, {password, "somepassword"}]}.
     
@@ -103,6 +105,15 @@ That's it.
 You can add a node, username, alias dynamically thanks to the `couchdproxy`
 script in `scripts` folder.
 
+### run couchdbproxy
+  
+At development run `start-dev.sh` script:
+    
+    ./start-dev.sh config/couchdbproxy.erlenv
+    
+Or in production you could run `start.sh` script:
+
+    ./start.sh config/couchdbproxy.erlenv
 
 ### basic usage 
 

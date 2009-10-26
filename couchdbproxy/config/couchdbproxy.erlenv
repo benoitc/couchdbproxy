@@ -1,0 +1,10 @@
+{couchdbproxy_hostname, "couchdbproxy.dev"}. % base hostname used for rewriting
+{couchdbproxy_name, couchdbproxy}.
+{couchdbproxy_port, 8000}.
+{couchdbproxy_ip, "0.0.0.0"}.
+{couchdbproxy_cookie, 'couchdbproxy_cookie_default'}.
+{couchbeam_heart_command, "start.sh"}.
+
+% params of couchdb node used to maintain connections user-couchdb
+{couchdbproxy_couchdb_params, [{host, "127.0.0.1"}, {port, 5984}]}.
+{couchdbproxy_db, "couchdbproxy"}.

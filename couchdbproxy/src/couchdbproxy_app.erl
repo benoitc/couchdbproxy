@@ -16,11 +16,17 @@
 
 -behaviour(application).
 -export([start/2,stop/1]).
-
+-export([read_config/0, read_config/1]).
 
 %% @spec start(_Type, _StartArgs) -> ServerRet
 %% @doc application start callback for couchdbproxy.
 start(_Type, _StartArgs) ->
+    case couchdbproxy:get_app_env(no_config) of
+        true -> nop; % promising to set all env variables some other way
+        _ -> read_config()
+    end,
+    register(couchdbproxy_app, self()),
+    erlang:set_cookie(node(), couchdbproxy:get_app_env(couchdbproxy_cookie)),
     couchdbproxy_deps:ensure(),
     couchdbproxy_sup:start_link().
 
@@ -28,3 +34,30 @@ start(_Type, _StartArgs) ->
 %% @doc application stop callback for couchdbproxy.
 stop(_State) ->
     ok.
+
+%% @spec read_config() -> ok
+%% @doc Read the couchdbbot erlenv configuration file and set environment variables.
+read_config() -> read_config(couchdbproxy:get_app_env(configpath)).
+%% @spec read_config(ConfigPath :: list()) -> ok
+%% @doc Read the couchdbbot erlenv configuration file with filename ConfigPath
+%%      and set environment variables.
+read_config(ConfigPath) ->
+    ConfigPairs = 
+        case file:consult(ConfigPath) of
+            {ok, Terms} -> Terms;
+            {error, Reason} ->
+                error_logger:info_msg("Failed to read config from: ~p (~p)~n",
+                                      [ConfigPath, Reason]),
+                []
+	end,
+    set_erlenv(ConfigPairs),
+    ok.
+
+%% @private
+set_erlenv([]) ->
+    ok;
+%% @private
+set_erlenv([{K, V}|T]) when is_atom(K) ->
+    application:set_env(couchdbproxy, K, V),
+    error_logger:info_msg("set env variable ~p:~p~n",[K,V]),
+    set_erlenv(T).

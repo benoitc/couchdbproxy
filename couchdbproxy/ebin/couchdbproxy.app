@@ -17,4 +17,4 @@
   ]},
   {registered, [couchdbproxy_sup]},
   {mod, {couchdbproxy_app, []}},
-  {applications, [kernel, stdlib, crypto, couchbeam]}]}.
+  {applications, [kernel, stdlib, sasl, crypto, ssl, lhttpc, couchbeam]}]}.
