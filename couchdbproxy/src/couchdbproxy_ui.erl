@@ -11,7 +11,7 @@
 % License for the specific language governing permissions and limitations under
 % the License.
 
--module(couchdbproxy_api).
+-module(couchdbproxy_ui).
 -author('Benoît Chesneau <benoitc@e-engura.org>').
 
 -include("couchdbproxy.hrl").

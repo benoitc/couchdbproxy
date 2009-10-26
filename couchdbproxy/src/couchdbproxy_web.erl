@@ -41,8 +41,8 @@ loop(Req, _DocRoot, BaseHostname) ->
 	case get_node(State) of
 	    not_found ->
 		    Req:not_found();
-	    {api, State1} ->
-	        couchdbproxy_api:http_handler(State1);
+	    {ui, State1} ->
+	        couchdbproxy_ui:http_handler(State1);
 	    {ok, State1} ->
 	        couchdbproxy_revproxy:request(State1)
 	end.
@@ -56,7 +56,7 @@ get_node(#proxy{mochi_req=Req, host=HostName, basename=BaseName}=State) ->
 	{HostName1, _, _} = mochiweb_util:partition(HostName, ":"),
 	if
 	    HostName1 =:= BaseName ->
-	        {api, State};
+	        {ui, State};
 	    true ->
 	        CNameRe = lists:append(["^(.*).", BaseName, "$"]),
         	{ok, R} = re:compile(CNameRe),
@@ -90,7 +90,7 @@ get_node(#proxy{mochi_req=Req, host=HostName, basename=BaseName}=State) ->
     end.
 	
 find_cname(["www"|[]], _RawPath) ->
-    api;
+    ui;
 find_cname([NodeName|[]], RawPath) ->
     {NodeName, RawPath};
 find_cname([NodeName, DbName|[]], RawPath) ->

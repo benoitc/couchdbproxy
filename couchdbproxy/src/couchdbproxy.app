@@ -1,9 +1,9 @@
 {application, couchdbproxy,
  [{description, "couchdbproxy"},
-  {vsn, "0.1"},
+  {vsn, "0.4"},
   {modules, [
     couchdbproxy,
-    couchdbproxy_api,
+    couchdbproxy_ui,
     couchdbproxy_app,
     couchdbproxy_sup,
     couchdbproxy_web,
