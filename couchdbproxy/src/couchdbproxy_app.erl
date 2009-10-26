@@ -40,10 +40,10 @@ stop(_State) ->
     ok.
 
 %% @spec read_config() -> ok
-%% @doc Read the couchdbbot erlenv configuration file and set environment variables.
+%% @doc Read the couchdbproxy erlenv configuration file and set environment variables.
 read_config() -> read_config(couchdbproxy:get_app_env(configpath)).
 %% @spec read_config(ConfigPath :: list()) -> ok
-%% @doc Read the couchdbbot erlenv configuration file with filename ConfigPath
+%% @doc Read the couchdbproxy erlenv configuration file with filename ConfigPath
 %%      and set environment variables.
 read_config(ConfigPath) ->
     ConfigPairs = 

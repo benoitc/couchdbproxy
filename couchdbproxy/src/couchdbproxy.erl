@@ -58,12 +58,12 @@ stop(Reason) ->
     Res.
     
 %% @spec get_app_env(Opt :: atom()) -> term()
-%% @doc The official way to get the values set in couchdbbot's configuration file.
+%% @doc The official way to get the values set in couchdbproxy's configuration file.
 %%      Will return the undefined atom if that option is unset.
 get_app_env(Opt) -> get_app_env(Opt, undefined).
 
 %% @spec get_app_env(Opt :: atom(), Default :: term()) -> term()
-%% @doc The official way to get the values set in riak's configuration file.
+%% @doc The official way to get the values set in couchdbproxy's configuration file.
 %%      Will return Default if that option is unset.
 get_app_env(Opt, Default) ->
     case application:get_env(couchdbproxy, Opt) of
