@@ -103,27 +103,27 @@ try_find_alias(#proxy{mochi_req=Req, host=HostName}=State) ->
     RawPath = Req:get(raw_path),
     {HostName1, _, _} = mochiweb_util:partition(HostName, ":"),
     case couchdbproxy_routes:get_alias(HostName1) of
-    [NodeName, Path] ->
-        case couchdbproxy_routes:get_node(NodeName) of
-            [MachineName, Port] ->
-                case build_proxy_url(MachineName, Port) of
-                    {ok, ProxyUrl} ->
-                        Path1 = case ?b2l(Path) of
-                            "/" -> RawPath;
-                            P -> lists:append([P, RawPath])
-                        end,
-                        {Path2, _, _} = mochiweb_util:urlsplit_path(Path1),
-                        State1 = State#proxy{url          = ProxyUrl, 
-                	                         path         = Path2,
-                	                         path_parts   = [list_to_binary(mochiweb_util:unquote(Part))
-                                                                    || Part <- string:tokens(Path2, "/")],
-                	                         route        = {cname, HostName}},
-                        {ok, State1};
-                    Other -> Other
-                end;
-            Other -> Other
-        end;
-    O -> O
+        [NodeName, Path] ->
+            case couchdbproxy_routes:get_node(NodeName) of
+                [MachineName, Port] ->
+                    case build_proxy_url(MachineName, Port) of
+                        {ok, ProxyUrl} ->
+                            Path1 = case ?b2l(Path) of
+                                "/" -> RawPath;
+                                P -> lists:append([P, RawPath])
+                            end,
+                            {Path2, _, _} = mochiweb_util:urlsplit_path(Path1),
+                            State1 = State#proxy{url          = ProxyUrl, 
+                    	                         path         = Path2,
+                    	                         path_parts   = [list_to_binary(mochiweb_util:unquote(Part))
+                                                                        || Part <- string:tokens(Path2, "/")],
+                    	                         route        = {cname, HostName}},
+                            {ok, State1};
+                        Other -> Other
+                    end;
+                Other -> Other
+            end;
+        O -> O
     end.
     
 get_option(Option, Options) ->
