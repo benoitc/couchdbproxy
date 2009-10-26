@@ -32,13 +32,22 @@ stop() ->
     mochiweb_http:stop(?MODULE).
 
 loop(Req, _DocRoot, BaseHostname) ->
+    HostName = host(Req),
     State = #proxy{mochi_req = Req,
                    socket    = Req:get(socket),
                    headers   = Req:get(headers),
                    method    = Req:get(method),
-                   host      = host(Req),
+                   host      = HostName,
                    basename  = BaseHostname},
-	case get_node(State) of
+                   
+    {HostName1, _, _} = mochiweb_util:partition(HostName, ":"),
+	HostNameParts = lists:reverse([mochiweb_util:unquote(Part)
+	                    || Part <- string:tokens(HostName1, ".")]),
+	
+	BaseHostNameParts = lists:reverse([mochiweb_util:unquote(Part1)
+                    	|| Part1 <- string:tokens(BaseHostname, ".")]),
+                    	
+	case get_node(BaseHostNameParts, HostNameParts, State) of
 	    not_found ->
 		    Req:not_found();
 	    {ui, State1} ->
@@ -47,46 +56,36 @@ loop(Req, _DocRoot, BaseHostname) ->
 	        couchdbproxy_revproxy:request(State1)
 	end.
 
-%% Internal API
-
-get_node(#proxy{mochi_req=Req, host=HostName, basename=BaseName}=State) ->
+%% Internal API  
+get_node([], [], State) ->
+    {ui, State};
+get_node([], HostRest, State) ->
+    try_find_cname(HostRest, State);
+get_node([Token|Rest], [Token|HostRest], State) ->
+    get_node(Rest, HostRest, State);
+get_node(_, _, State) ->
+    try_find_alias(State).
+    
+try_find_cname(CNameParts, #proxy{mochi_req=Req}=State) ->
     RawPath = Req:get(raw_path),
-	%% in case there is a port
-	%% for now we manage only one base hostname and port
-	{HostName1, _, _} = mochiweb_util:partition(HostName, ":"),
-	if
-	    HostName1 =:= BaseName ->
-	        {ui, State};
-	    true ->
-	        CNameRe = lists:append(["^(.*).", BaseName, "$"]),
-        	{ok, R} = re:compile(CNameRe),
-        	case re:run(HostName1, R, [{capture,[1], list}]) of
-        	    {match, [CName]} ->
-            	    CNameParts = lists:reverse([mochiweb_util:unquote(Part)
-            		 		|| Part <- string:tokens(CName, ".")]),
-            		case find_cname(CNameParts, RawPath) of
-            		    api -> {api, State};
-            		    {NodeName, Path} ->
-            		        case couchdbproxy_routes:get_node(NodeName) of
-            	                [MachineName, Port] ->
-            	                    case build_proxy_url(MachineName, Port) of
-            	                        {ok, ProxyUrl} ->
-            	                            {Path0, _, _} = mochiweb_util:urlsplit_path(Path),
-                    	                    State1 = State#proxy{url        = ProxyUrl,
-                    	                                         path       = Path,
-                    	                                         path_parts = [list_to_binary(mochiweb_util:unquote(Part))
-                                                                                             || Part <- string:tokens(Path0, "/")],
-                    	                                         route      = {node, NodeName}},
-                    	                    {ok, State1};
-                    	                O -> O
-                    	            end;
-            	                O -> O
-                            end
-                            
-                    end;
-            	_ ->
-                    find_alias(HostName1, RawPath, State)
-    	end
+    case find_cname(CNameParts, RawPath) of
+	    ui -> {ui, State};
+	    {NodeName, Path} ->
+	        case couchdbproxy_routes:get_node(NodeName) of
+                [MachineName, Port] ->
+                    case build_proxy_url(MachineName, Port) of
+                        {ok, ProxyUrl} ->
+                            {Path0, _, _} = mochiweb_util:urlsplit_path(Path),
+    	                    State1 = State#proxy{url        = ProxyUrl,
+    	                                         path       = Path,
+    	                                         path_parts = [list_to_binary(mochiweb_util:unquote(Part))
+                                                                             || Part <- string:tokens(Path0, "/")],
+    	                                         route      = {node, NodeName}},
+    	                    {ok, State1};
+    	                O -> O
+    	            end;
+                O -> O
+            end
     end.
 	
 find_cname(["www"|[]], _RawPath) ->
@@ -100,8 +99,10 @@ find_cname([NodeName, DbName, DName|_], RawPath) ->
     Path = lists:append(["/", DbName, "/", "_design", "/", DName, RawPath]),
     {NodeName, Path}.
     	
-find_alias(HostName, RawPath, State) ->
-    case couchdbproxy_routes:get_alias(HostName) of
+try_find_alias(#proxy{mochi_req=Req, host=HostName}=State) ->
+    RawPath = Req:get(raw_path),
+    {HostName1, _, _} = mochiweb_util:partition(HostName, ":"),
+    case couchdbproxy_routes:get_alias(HostName1) of
     [NodeName, Path] ->
         case couchdbproxy_routes:get_node(NodeName) of
             [MachineName, Port] ->
