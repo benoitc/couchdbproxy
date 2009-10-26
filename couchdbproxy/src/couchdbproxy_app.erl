@@ -10,6 +10,10 @@
 % WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied. See the
 % License for the specific language governing permissions and limitations under
 % the License.
+%
+% read_config, set-erlenv functions come from riak project under Apache License 2
+% Copyright 2007-2009 Basho Technologies
+%
 
 -module(couchdbproxy_app).
 -author('author <author@example.com>').
