@@ -15,8 +15,9 @@ autom4te.cache
 build-aux
 *.diff
 *.hg*
-
+.DS_Store
 couchdbproxy/priv/since.st
 couchdbproxy/doc/*.html
 couchdbproxy/deps/lhttpc/doc/*.html
 couchdbproxy/deps/couchbeam/doc/*.html
+deps/*

@@ -1,3 +1,0 @@
-{application,lhttpc}.
-{packages,[]}.
-{modules,[lhttpc,lhttpc_manager,lhttpc_sup]}.
